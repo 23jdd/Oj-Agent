@@ -52,7 +52,7 @@ const treeSize = computed(() => {
 </script>
 
 <template>
-  <svg :width="treeSize.width" :height="treeSize.height" :viewBox="`0 0 ${treeSize.width} ${treeSize.height}`" class="tree-renderer">
+  <svg :viewBox="`0 0 ${treeSize.width} ${treeSize.height}`" width="100%" preserveAspectRatio="xMidYMid meet" class="tree-renderer">
     <!-- Edges -->
     <g v-for="n in nodes" :key="'edge-'+n.id">
       <line

@@ -39,10 +39,13 @@ function cellBorderWidth(idx) {
   if (idx === left.value || idx === right.value) return 3
   return 0
 }
+
+const svgW = computed(() => paddingLeft * 2 + values.value.length * (boxWidth + gap))
+const viewBox = computed(() => `0 0 ${svgW.value} 180`)
 </script>
 
 <template>
-  <svg :width="paddingLeft * 2 + values.length * (boxWidth + gap)" :height="200" class="twopointer-renderer">
+  <svg :viewBox="viewBox" width="100%" preserveAspectRatio="xMidYMid meet" class="twopointer-renderer">
     <!-- Pointer labels -->
     <g v-if="left >= 0">
       <text

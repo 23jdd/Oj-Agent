@@ -73,7 +73,7 @@ body {
 <style scoped>
 .app-layout {
   display: grid;
-  grid-template-columns: 260px 1fr 380px;
+  grid-template-columns: 260px 1fr 420px;
   grid-template-rows: 1fr 40px;
   height: 100vh;
   width: 100vw;

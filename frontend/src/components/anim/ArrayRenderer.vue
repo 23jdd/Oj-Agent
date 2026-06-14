@@ -27,10 +27,13 @@ function cellColor(idx) {
   if (highlightIdx.value.includes(idx)) return '#3b82f6'
   return '#374151'
 }
+
+const svgW = computed(() => paddingLeft * 2 + values.value.length * (boxWidth + gap))
+const viewBox = computed(() => `0 0 ${svgW.value} 240`)
 </script>
 
 <template>
-  <svg :width="paddingLeft * 2 + values.length * (boxWidth + gap)" :height="220" class="array-renderer">
+  <svg :viewBox="viewBox" width="100%" preserveAspectRatio="xMidYMid meet" class="array-renderer">
     <!-- Bar chart background -->
     <g v-for="(v, i) in values" :key="'bar-'+i">
       <rect

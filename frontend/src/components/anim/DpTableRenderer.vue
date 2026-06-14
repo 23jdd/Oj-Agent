@@ -23,10 +23,14 @@ function cellFill(r, c) {
   if (r === currentRow.value && currentCol.value >= 0) return '#1e3a5f'
   return '#1f2937'
 }
+
+const svgW = computed(() => headerW + (colHeaders.value.length) * cellW + 30)
+const svgH = computed(() => (rows.value.length + 1) * cellH + 30)
+const viewBox = computed(() => `0 0 ${svgW.value} ${svgH.value}`)
 </script>
 
 <template>
-  <svg :width="headerW + (colHeaders.length) * cellW + 30" :height="(rows.length + 1) * cellH + 30" class="dptable-renderer">
+  <svg :viewBox="viewBox" width="100%" preserveAspectRatio="xMidYMid meet" class="dptable-renderer">
     <!-- Column headers -->
     <g v-for="(h, ci) in colHeaders" :key="'ch-'+ci">
       <rect :x="headerW + ci * cellW" :y="0" :width="cellW" :height="cellH" fill="#111827" stroke="#374151" />
