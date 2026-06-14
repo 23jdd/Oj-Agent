@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	"Oj-Agent/llm"
 )
 
 type Role string
@@ -148,11 +151,13 @@ type ChatService struct {
 	mu          sync.Mutex
 	sessions    map[string]*ChatSession
 	totalTokens int
+	llmClient   *llm.Client
 }
 
-func NewChatService() *ChatService {
+func NewChatService(llmClient *llm.Client) *ChatService {
 	return &ChatService{
-		sessions: make(map[string]*ChatSession),
+		sessions:  make(map[string]*ChatSession),
+		llmClient: llmClient,
 	}
 }
 
@@ -214,7 +219,21 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 	}
 
 	problemType := detectProblemType(req.Content)
-	assistantMsg, anim := c.generateUnifiedResponse(req, problemType)
+	var assistantMsg Message
+	var anim UnifiedAnim
+
+	if c.llmClient != nil && c.llmClient.Available() {
+		llmResponse, err := c.llmClient.Generate(context.Background(), req.Content, req.Language, animRules)
+		if err == nil && llmResponse != "" {
+			assistantMsg = Message{Role: RoleAssistant, Content: llmResponse, Time: time.Now()}
+			anim = c.buildMockAnim(problemType)
+		} else {
+			assistantMsg, anim = c.generateUnifiedResponse(req, problemType)
+		}
+	} else {
+		assistantMsg, anim = c.generateUnifiedResponse(req, problemType)
+	}
+
 	session.Messages = append(session.Messages, assistantMsg)
 	session.UpdatedAt = time.Now()
 
@@ -231,6 +250,38 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 		Animation:        anim,
 	}
 }
+
+func (c *ChatService) buildMockAnim(probType string) UnifiedAnim {
+	switch probType {
+	case "tree":
+		_, anim := c.genTreeUnified(SendMessageRequest{Language: "go"})
+		return anim
+	case "dptable":
+		_, anim := c.genDpUnified(SendMessageRequest{Language: "go"})
+		return anim
+	case "linkedlist":
+		_, anim := c.genLinkedListUnified(SendMessageRequest{Language: "go"})
+		return anim
+	case "slidingwindow":
+		_, anim := c.genSlidingWindowUnified(SendMessageRequest{Language: "go"})
+		return anim
+	case "sorting":
+		_, anim := c.genSortingUnified(SendMessageRequest{Language: "go"})
+		return anim
+	case "twopointer":
+		_, anim := c.genTwoPointerUnified(SendMessageRequest{Language: "go"})
+		return anim
+	default:
+		_, anim := c.genArrayUnified(SendMessageRequest{Language: "go"})
+		return anim
+	}
+}
+
+var animRules = `1. 题目解析：识别类型（数组/链表/树/图/DP等）、输入输出、难度
+2. 解题思路：核心思路1-2句 + 时间/空间复杂度
+3. 算法步骤：拆分为5-10个关键步骤，每步是明确状态变化
+4. 代码生成：完整可运行代码，变量名与步骤标签一致
+5. 输出Markdown格式：## 题目分析 / ## 解题思路 / ## 算法步骤 / ## 代码实现`
 
 func (c *ChatService) GetTokenUsage() TokenUsage {
 	c.mu.Lock()

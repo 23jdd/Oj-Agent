@@ -72,7 +72,7 @@ git clone https://github.com/your-org/Oj-Agent.git
 cd Oj-Agent
 
 # 设置环境变量（将 xxx 替换为你的 API Key）
-cp .env.example .env
+cp .env
 
 # 安装前端依赖
 cd frontend && npm install && cd ..

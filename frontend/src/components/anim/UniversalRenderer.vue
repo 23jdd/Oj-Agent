@@ -94,7 +94,7 @@ const viewBox = computed(() => `0 0 ${props.svgW} ${props.svgH}`)
 <template>
   <svg :viewBox="viewBox" width="100%" preserveAspectRatio="xMidYMid meet" class="universal-renderer">
     <!-- Background -->
-    <rect :width="svgW" :height="svgH" fill="#1a1f2e" />
+    <rect :width="svgW" :height="svgH" fill="#0f1419" />
 
     <!-- Lines (render first so they appear behind shapes) -->
     <g v-for="el in elements" :key="'line-'+el.id">

@@ -1,246 +1,125 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "OJ-Agent Animation Data",
-  "description": "统一动画数据格式，描述算法执行过程的可视化数据",
+  "title": "OJ-Agent Unified Animation Format",
+  "description": "通用元素+帧动画模型，一套 schema 覆盖所有算法可视化类型",
   "type": "object",
-  "required": ["type", "steps"],
+  "required": ["elements", "frames", "svgW", "svgH"],
   "properties": {
-    "type": {
-      "type": "string",
-      "enum": ["array", "twopointer", "slidingwindow", "sorting", "tree", "graph", "dptable", "linkedlist", "stackqueue", "backtracking"],
-      "description": "动画类型标识"
-    },
-    "steps": {
+    "elements": {
       "type": "array",
-      "description": "动画步骤列表，按执行顺序排列",
-      "items": { "$ref": "#/$defs/AnimStep" }
+      "description": "初始场景中的所有可视元素",
+      "items": { "$ref": "#/$defs/Element" }
     },
-    "array": { "$ref": "#/$defs/ArrayConfig" },
-    "tree": { "$ref": "#/$defs/TreeConfig" },
-    "table": { "$ref": "#/$defs/DpTableConfig" },
-    "list": { "$ref": "#/$defs/LinkedListConfig" },
-    "graph": { "$ref": "#/$defs/GraphConfig" }
+    "frames": {
+      "type": "array",
+      "description": "动画帧序列，每帧只描述相对于上一帧的变化量(delta)",
+      "items": { "$ref": "#/$defs/Frame" }
+    },
+    "svgW": { "type": "number", "description": "SVG viewBox 宽度" },
+    "svgH": { "type": "number", "description": "SVG viewBox 高度" }
   },
 
   "$defs": {
-    "AnimStep": {
+    "Element": {
       "type": "object",
-      "required": ["description"],
+      "required": ["id", "kind"],
       "properties": {
-        "description": {
+        "id": { "type": "string", "description": "唯一标识符，如 cell_0, edge_2, ptr_l" },
+        "kind": {
           "type": "string",
-          "description": "步骤描述文本"
+          "enum": ["rect", "circle", "line", "label"],
+          "description": "元素形状类型"
         },
-        "values": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "当前数组值（用于 array/twopointer/sorting/slidingwindow）"
-        },
-        "highlightIdx": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "高亮索引（蓝色）"
-        },
-        "compareIdx": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "正在比较的索引（黄色）"
-        },
-        "resultIdx": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "最终结果索引（绿色）"
-        },
-        "swapIdx": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "正在交换的两个索引"
-        },
-        "pivotIdx": {
-          "type": "integer",
-          "description": "排序算法中的基准索引"
-        },
-        "pointerLeft": {
-          "type": "integer",
-          "description": "左指针位置"
-        },
-        "pointerRight": {
-          "type": "integer",
-          "description": "右指针位置"
-        },
-        "pointerMid": {
-          "type": "integer",
-          "description": "中间指针位置（二分查找）"
-        },
-        "windowStart": {
-          "type": "integer",
-          "description": "滑动窗口起始索引"
-        },
-        "windowEnd": {
-          "type": "integer",
-          "description": "滑动窗口结束索引"
-        },
-        "row": {
-          "type": "integer",
-          "description": "DP表中的当前行"
-        },
-        "col": {
-          "type": "integer",
-          "description": "DP表中的当前列"
-        },
-        "cellValue": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "w": { "type": "number", "description": "rect 宽度" },
+        "h": { "type": "number", "description": "rect 高度" },
+        "r": { "type": "number", "description": "circle 半径" },
+        "x2": { "type": "number", "description": "line 终点 X" },
+        "y2": { "type": "number", "description": "line 终点 Y" },
+        "text": { "type": "string", "description": "显示文字" },
+        "style": {
           "type": "string",
-          "description": "填充到单元格的值"
+          "enum": ["normal", "highlight", "compare", "swap", "result", "pivot", "dim"],
+          "default": "normal",
+          "description": "颜色状态"
         },
-        "tableGrid": {
-          "type": "array",
-          "items": { "type": "array", "items": { "type": "string" } },
-          "description": "DP表当前完整状态"
-        },
-        "nodeId": {
-          "type": "string",
-          "description": "当前操作的树/图/链表节点ID"
-        },
-        "nodePath": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "已访问的节点路径（树遍历/图遍历）"
-        },
-        "listNodes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/ListNode" },
-          "description": "链表当前节点状态"
-        },
-        "stackValues": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "栈/队列当前元素"
-        },
-        "operation": {
-          "type": "string",
-          "enum": ["push", "pop", "enqueue", "dequeue", "peek"],
-          "description": "栈/队列操作类型"
-        },
-        "operand": {
-          "type": "string",
-          "description": "操作的操作数（push/enqueue的值）"
-        }
+        "rx": { "type": "number", "description": "rect 圆角" },
+        "visible": { "type": "boolean", "default": true },
+        "arrow": { "type": "boolean", "description": "line 是否有箭头" }
       }
     },
 
-    "ArrayConfig": {
+    "Frame": {
       "type": "object",
+      "required": ["desc"],
       "properties": {
-        "values": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "description": "初始数组值"
-        },
-        "labels": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "数组元素标签"
+        "desc": { "type": "string", "description": "本帧的描述文字" },
+        "delta": {
+          "type": "object",
+          "description": "元素ID -> 变更属性，只传变化的部分",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "x2": { "type": "number" },
+              "y2": { "type": "number" },
+              "text": { "type": "string" },
+              "style": { "type": "string" },
+              "visible": { "type": "boolean" }
+            }
+          }
         }
       }
+    }
+  },
+
+  "examples": {
+    "array_twoSum": {
+      "elements": [
+        {"id":"cell_0","kind":"rect","x":30,"y":30,"w":48,"h":42,"text":"2","style":"normal","rx":6,"visible":true},
+        {"id":"cell_1","kind":"rect","x":86,"y":30,"w":48,"h":42,"text":"7","style":"normal","rx":6,"visible":true},
+        {"id":"hash_hint","kind":"label","x":30,"y":108,"text":"哈希表: {}","style":"dim"}
+      ],
+      "frames": [
+        {"desc":"i=0, v=2, 存入map", "delta":{"cell_0":{"style":"highlight"},"hash_hint":{"text":"哈希表: {2:0}"}}},
+        {"desc":"i=1, v=7, 命中!", "delta":{"cell_0":{"style":"compare"},"cell_1":{"style":"highlight"}}},
+        {"desc":"返回 [0,1]", "delta":{"cell_0":{"style":"result"},"cell_1":{"style":"result"}}}
+      ],
+      "svgW": 430,
+      "svgH": 168
     },
 
-    "TreeConfig": {
-      "type": "object",
-      "properties": {
-        "root": { "type": "string", "description": "根节点ID" },
-        "nodes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/TreeNodeData" }
-        }
-      }
+    "tree_inorder": {
+      "elements": [
+        {"id":"n_1","kind":"circle","x":300,"y":50,"r":22,"text":"1","style":"normal","visible":true},
+        {"id":"n_2","kind":"circle","x":170,"y":160,"r":22,"text":"2","style":"normal","visible":true},
+        {"id":"edge_0","kind":"line","x":300,"y":72,"x2":170,"y2":138,"style":"#4b5563","visible":true},
+        {"id":"path_label","kind":"label","x":320,"y":330,"text":"","style":"dim"}
+      ],
+      "frames": [
+        {"desc":"从根节点1开始","delta":{"n_1":{"style":"highlight"}}},
+        {"desc":"递归→节点2","delta":{"n_1":{"style":"dim"},"n_2":{"style":"highlight"},"edge_0":{"style":"#3b82f6"}}},
+        {"desc":"输出 2","delta":{"n_2":{"style":"result"},"path_label":{"text":"输出: [2]"}}}
+      ],
+      "svgW": 560,
+      "svgH": 380
     },
 
-    "TreeNodeData": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "value": { "type": "string" },
-        "left": { "type": "string", "description": "左子节点ID" },
-        "right": { "type": "string", "description": "右子节点ID" },
-        "x": { "type": "integer", "description": "渲染X坐标" },
-        "y": { "type": "integer", "description": "渲染Y坐标" }
-      },
-      "required": ["id", "value", "x", "y"]
-    },
-
-    "DpTableConfig": {
-      "type": "object",
-      "properties": {
-        "rows": { "type": "integer", "description": "表格行数" },
-        "cols": { "type": "integer", "description": "表格列数" },
-        "rowHeaders": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "行标题"
-        },
-        "colHeaders": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "列标题"
-        }
-      }
-    },
-
-    "LinkedListConfig": {
-      "type": "object",
-      "properties": {
-        "nodes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/ListNode" }
-        }
-      }
-    },
-
-    "ListNode": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "value": { "type": "string" },
-        "next": { "type": "string", "description": "下一个节点ID" },
-        "x": { "type": "integer" },
-        "y": { "type": "integer" }
-      },
-      "required": ["id", "value", "x", "y"]
-    },
-
-    "GraphConfig": {
-      "type": "object",
-      "properties": {
-        "nodes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/GraphNode" }
-        },
-        "edges": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/GraphEdge" }
-        }
-      }
-    },
-
-    "GraphNode": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "label": { "type": "string" },
-        "x": { "type": "integer" },
-        "y": { "type": "integer" }
-      },
-      "required": ["id", "label", "x", "y"]
-    },
-
-    "GraphEdge": {
-      "type": "object",
-      "properties": {
-        "from": { "type": "string" },
-        "to": { "type": "string" },
-        "weight": { "type": "integer" }
-      },
-      "required": ["from", "to"]
+    "linkedlist_reverse": {
+      "elements": [
+        {"id":"n0","kind":"rect","x":30,"y":50,"w":52,"h":38,"text":"1","style":"highlight","rx":6,"visible":true},
+        {"id":"edge_0","kind":"line","x":82,"y":69,"x2":100,"y2":69,"style":"#4b5563","arrow":true,"visible":true},
+        {"id":"n1","kind":"rect","x":100,"y":50,"w":52,"h":38,"text":"2","style":"normal","rx":6,"visible":true},
+        {"id":"head_label","kind":"label","x":56,"y":34,"text":"head","style":"dim"}
+      ],
+      "frames": [
+        {"desc":"prev=nil, curr=1","delta":{"n0":{"style":"highlight"},"n1":{"style":"highlight"}}},
+        {"desc":"1.Next=nil, prev=1","delta":{"n0":{"style":"result"},"n1":{"style":"highlight"},"edge_0":{"style":"dim"}}}
+      ],
+      "svgW": 400,
+      "svgH": 160
     }
   }
 }

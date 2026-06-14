@@ -19,67 +19,52 @@ provide('animationData', animationData)
 </script>
 
 <template>
-  <div class="app-layout">
-    <Sidebar
-      :sessions="sessions"
-      :activeId="activeSessionId"
-      @select="activeSessionId = $event"
-      @new="activeSessionId = ''; messages = []; animationData = null"
-      @delete="onDeleteSession"
-    />
-    <ChatArea
-      :messages="messages"
-      :sessionId="activeSessionId"
-    />
-    <AnimationPanel
-      :animationData="animationData"
-    />
-    <TokenBar :usage="tokenUsage" />
+  <div class="app-shell">
+    <div class="app-layout">
+      <Sidebar
+        :sessions="sessions"
+        :activeId="activeSessionId"
+        @select="activeSessionId = $event"
+        @new="activeSessionId = ''; messages = []; animationData = null"
+      />
+      <ChatArea :messages="messages" :sessionId="activeSessionId" />
+      <AnimationPanel :animationData="animationData" />
+      <TokenBar :usage="tokenUsage" />
+    </div>
   </div>
 </template>
 
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #111827;
-  color: #e5e7eb;
-  overflow: hidden;
-}
-
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #1f2937;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #4b5563;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
-}
-</style>
-
 <style scoped>
+.app-shell {
+  width: 100vw; height: 100vh;
+  background: var(--bg-deepest);
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(59,130,246,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(139,92,246,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(59,130,246,0.02) 0%, transparent 70%);
+}
+
 .app-layout {
   display: grid;
   grid-template-columns: 260px 1fr 420px;
-  grid-template-rows: 1fr 40px;
-  height: 100vh;
-  width: 100vw;
+  grid-template-rows: 1fr 44px;
+  height: 100vh; width: 100vw;
+}
+
+.app-layout > :nth-child(1) {
+  border-right: 1px solid rgba(42,48,60,0.6);
+  box-shadow: 3px 0 20px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+
+.app-layout > :nth-child(3) {
+  border-left: 1px solid rgba(42,48,60,0.6);
+  box-shadow: -3px 0 20px rgba(0,0,0,0.2);
+  z-index: 2;
 }
 
 .app-layout > :nth-child(4) {
   grid-column: 1 / -1;
+  z-index: 3;
 }
 </style>

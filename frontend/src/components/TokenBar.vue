@@ -1,14 +1,12 @@
 <script setup>
 import { computed } from 'vue'
 
-const props = defineProps({
-  usage: Object
-})
+const props = defineProps({ usage: Object })
 
 const formatTokens = (val) => {
   if (!val || val === 0) return '0'
-  if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M'
-  if (val >= 1000) return (val / 1000).toFixed(1) + 'K'
+  if (val >= 1e6) return (val / 1e6).toFixed(1) + 'M'
+  if (val >= 1e3) return (val / 1e3).toFixed(1) + 'K'
   return String(val)
 }
 </script>
@@ -16,60 +14,43 @@ const formatTokens = (val) => {
 <template>
   <div class="token-bar">
     <div class="token-item">
-      <span class="token-label">模型</span>
-      <span class="token-value">GPT-4o</span>
+      <span class="dot online"></span>
+      <span class="token-label">GPT-4o</span>
     </div>
     <div class="divider"></div>
     <div class="token-item">
-      <span class="token-label">本次会话</span>
-      <span class="token-value">{{ formatTokens(usage?.sessionTokens) }} tokens</span>
+      <svg class="token-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      <span class="token-value">{{ formatTokens(usage?.sessionTokens) }}</span>
+      <span class="token-suffix">/ 本次</span>
     </div>
     <div class="divider"></div>
     <div class="token-item">
-      <span class="token-label">累计消耗</span>
-      <span class="token-value">{{ formatTokens(usage?.totalTokens) }} tokens</span>
+      <span class="token-value">{{ formatTokens(usage?.totalTokens) }}</span>
+      <span class="token-suffix">/ 累计</span>
     </div>
-    <div class="spacer"></div>
-    <div class="token-item">
-      <span class="token-label">OJ Agent v0.1</span>
-    </div>
+    <div class="flex-spacer"></div>
+    <span class="version">v0.1.0</span>
   </div>
 </template>
 
 <style scoped>
 .token-bar {
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  height: 40px;
-  background: #0f172a;
-  border-top: 1px solid #1e293b;
-  font-size: 12px;
+  display: flex; align-items: center; gap: 2px; padding: 0 18px; height: 44px;
+  background: rgba(22, 27, 34, 0.9); backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 12px; border-top: 1px solid rgba(42,48,60,0.5);
 }
-
-.token-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.token-label {
-  color: #64748b;
-}
-
-.token-value {
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.divider {
-  width: 1px;
-  height: 16px;
-  background: #334155;
-  margin: 0 14px;
-}
-
-.spacer {
-  flex: 1;
-}
+.token-item { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.token-label { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+.token-value { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+.token-suffix { color: var(--text-muted); font-size: 10px; font-weight: 400; }
+.token-icon { color: var(--text-muted); flex-shrink: 0; }
+.divider { width: 1px; height: 16px; background: #2a303c; margin: 0 16px; }
+.flex-spacer { flex: 1; }
+.version { color: var(--text-muted); font-size: 10px; opacity: 0.5; letter-spacing: 0.5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot.online { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.5); animation: dotPulse 2s ease-in-out infinite; }
+@keyframes dotPulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
 </style>
