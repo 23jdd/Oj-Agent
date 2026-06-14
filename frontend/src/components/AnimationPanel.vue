@@ -4,6 +4,9 @@ import ArrayRenderer from './anim/ArrayRenderer.vue'
 import TwoPointerRenderer from './anim/TwoPointerRenderer.vue'
 import TreeRenderer from './anim/TreeRenderer.vue'
 import DpTableRenderer from './anim/DpTableRenderer.vue'
+import LinkedListRenderer from './anim/LinkedListRenderer.vue'
+import SlidingWindowRenderer from './anim/SlidingWindowRenderer.vue'
+import SortingRenderer from './anim/SortingRenderer.vue'
 
 const props = defineProps({
   animationData: Object,
@@ -88,11 +91,17 @@ onBeforeUnmount(() => {
   if (animationTimer) clearTimeout(animationTimer)
 })
 
+const listData = computed(() => props.animationData?.list || null)
+
 const rendererComponent = computed(() => {
   switch (animType.value) {
     case 'twopointer': return TwoPointerRenderer
+    case 'slidingwindow': return SlidingWindowRenderer
+    case 'sorting': return SortingRenderer
     case 'tree': return TreeRenderer
     case 'dptable': return DpTableRenderer
+    case 'linkedlist': return LinkedListRenderer
+    case 'graph':
     case 'array':
     default: return ArrayRenderer
   }
@@ -139,6 +148,7 @@ const rendererComponent = computed(() => {
           :array-data="arrayData"
           :tree-data="treeData"
           :table-data="tableData"
+          :list-data="listData"
           :anim-state="animState"
         />
         <div class="step-description" v-if="currentStep">

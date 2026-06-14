@@ -56,6 +56,13 @@ export class AnimStep {
              * @member
              * @type {number | undefined}
              */
+            this["pivotIdx"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
             this["pointerLeft"] = undefined;
         }
         if (/** @type {any} */(false)) {
@@ -64,6 +71,27 @@ export class AnimStep {
              * @type {number | undefined}
              */
             this["pointerRight"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["pointerMid"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["windowStart"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["windowEnd"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
@@ -114,6 +142,13 @@ export class AnimStep {
              */
             this["nodePath"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {ListNodeData[] | undefined}
+             */
+            this["listNodes"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -128,9 +163,10 @@ export class AnimStep {
         const $$createField2_0 = $$createType0;
         const $$createField3_0 = $$createType0;
         const $$createField4_0 = $$createType0;
-        const $$createField7_0 = $$createType0;
-        const $$createField11_0 = $$createType2;
-        const $$createField13_0 = $$createType1;
+        const $$createField11_0 = $$createType0;
+        const $$createField15_0 = $$createType2;
+        const $$createField17_0 = $$createType1;
+        const $$createField18_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("highlightIdx" in $$parsedSource) {
             $$parsedSource["highlightIdx"] = $$createField1_0($$parsedSource["highlightIdx"]);
@@ -145,13 +181,16 @@ export class AnimStep {
             $$parsedSource["swapIdx"] = $$createField4_0($$parsedSource["swapIdx"]);
         }
         if ("values" in $$parsedSource) {
-            $$parsedSource["values"] = $$createField7_0($$parsedSource["values"]);
+            $$parsedSource["values"] = $$createField11_0($$parsedSource["values"]);
         }
         if ("tableGrid" in $$parsedSource) {
-            $$parsedSource["tableGrid"] = $$createField11_0($$parsedSource["tableGrid"]);
+            $$parsedSource["tableGrid"] = $$createField15_0($$parsedSource["tableGrid"]);
         }
         if ("nodePath" in $$parsedSource) {
-            $$parsedSource["nodePath"] = $$createField13_0($$parsedSource["nodePath"]);
+            $$parsedSource["nodePath"] = $$createField17_0($$parsedSource["nodePath"]);
+        }
+        if ("listNodes" in $$parsedSource) {
+            $$parsedSource["listNodes"] = $$createField18_0($$parsedSource["listNodes"]);
         }
         return new AnimStep(/** @type {Partial<AnimStep>} */($$parsedSource));
     }
@@ -191,6 +230,13 @@ export class AnimationData {
              */
             this["table"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {LinkedListData | null | undefined}
+             */
+            this["list"] = undefined;
+        }
         if (!("steps" in $$source)) {
             /**
              * @member
@@ -208,10 +254,11 @@ export class AnimationData {
      * @returns {AnimationData}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType4;
-        const $$createField2_0 = $$createType6;
-        const $$createField3_0 = $$createType8;
-        const $$createField4_0 = $$createType10;
+        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType8;
+        const $$createField3_0 = $$createType10;
+        const $$createField4_0 = $$createType12;
+        const $$createField5_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("array" in $$parsedSource) {
             $$parsedSource["array"] = $$createField1_0($$parsedSource["array"]);
@@ -222,8 +269,11 @@ export class AnimationData {
         if ("table" in $$parsedSource) {
             $$parsedSource["table"] = $$createField3_0($$parsedSource["table"]);
         }
+        if ("list" in $$parsedSource) {
+            $$parsedSource["list"] = $$createField4_0($$parsedSource["list"]);
+        }
         if ("steps" in $$parsedSource) {
-            $$parsedSource["steps"] = $$createField4_0($$parsedSource["steps"]);
+            $$parsedSource["steps"] = $$createField5_0($$parsedSource["steps"]);
         }
         return new AnimationData(/** @type {Partial<AnimationData>} */($$parsedSource));
     }
@@ -323,7 +373,7 @@ export class ChatSession {
      * @returns {ChatSession}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType12;
+        const $$createField2_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField2_0($$parsedSource["messages"]);
@@ -386,6 +436,101 @@ export class DpTableData {
             $$parsedSource["colHeaders"] = $$createField3_0($$parsedSource["colHeaders"]);
         }
         return new DpTableData(/** @type {Partial<DpTableData>} */($$parsedSource));
+    }
+}
+
+export class LinkedListData {
+    /**
+     * Creates a new LinkedListData instance.
+     * @param {Partial<LinkedListData>} [$$source = {}] - The source object to create the LinkedListData.
+     */
+    constructor($$source = {}) {
+        if (!("nodes" in $$source)) {
+            /**
+             * @member
+             * @type {ListNodeData[]}
+             */
+            this["nodes"] = [];
+        }
+        if (!("head" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["head"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LinkedListData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {LinkedListData}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("nodes" in $$parsedSource) {
+            $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
+        }
+        return new LinkedListData(/** @type {Partial<LinkedListData>} */($$parsedSource));
+    }
+}
+
+export class ListNodeData {
+    /**
+     * Creates a new ListNodeData instance.
+     * @param {Partial<ListNodeData>} [$$source = {}] - The source object to create the ListNodeData.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("value" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["value"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["next"] = undefined;
+        }
+        if (!("x" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListNodeData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ListNodeData}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListNodeData(/** @type {Partial<ListNodeData>} */($$parsedSource));
     }
 }
 
@@ -545,10 +690,10 @@ export class SendMessageResponse {
      * @returns {SendMessageResponse}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType11;
-        const $$createField1_0 = $$createType11;
-        const $$createField3_0 = $$createType13;
-        const $$createField4_0 = $$createType14;
+        const $$createField0_0 = $$createType15;
+        const $$createField1_0 = $$createType15;
+        const $$createField3_0 = $$createType17;
+        const $$createField4_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("userMessage" in $$parsedSource) {
             $$parsedSource["userMessage"] = $$createField0_0($$parsedSource["userMessage"]);
@@ -687,7 +832,7 @@ export class TreeData {
      * @returns {TreeData}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType16;
+        const $$createField0_0 = $$createType20;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("nodes" in $$parsedSource) {
             $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
@@ -763,17 +908,21 @@ export class TreeNodeData {
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = $Create.Array($Create.Any);
 const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = ArrayData.createFrom;
-const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = TreeData.createFrom;
+const $$createType3 = ListNodeData.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = ArrayData.createFrom;
 const $$createType6 = $Create.Nullable($$createType5);
-const $$createType7 = DpTableData.createFrom;
+const $$createType7 = TreeData.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = AnimStep.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = Message.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = TokenUsage.createFrom;
-const $$createType14 = AnimationData.createFrom;
-const $$createType15 = TreeNodeData.createFrom;
+const $$createType9 = DpTableData.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = LinkedListData.createFrom;
+const $$createType12 = $Create.Nullable($$createType11);
+const $$createType13 = AnimStep.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = Message.createFrom;
 const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = TokenUsage.createFrom;
+const $$createType18 = AnimationData.createFrom;
+const $$createType19 = TreeNodeData.createFrom;
+const $$createType20 = $Create.Array($$createType19);
