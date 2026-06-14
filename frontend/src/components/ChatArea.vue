@@ -18,7 +18,7 @@ const chatContainer = ref(null)
 const tokenUsage = inject('tokenUsage')
 const sessions = inject('sessions')
 const activeSessionId = inject('activeSessionId')
-const animationSteps = inject('animationSteps')
+const animationData = inject('animationData')
 
 const models = ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo', 'deepseek-v3']
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
@@ -89,7 +89,9 @@ const sendMessage = async () => {
       sessionInList.msgCount = (sessionInList.msgCount || 0) + 2
     }
 
-    parseAnimationSteps(assistantMsg.content)
+    if (response.animation) {
+      animationData.value = response.animation
+    }
   } catch (e) {
     console.error('Failed to send message:', e)
     if (!props.messages) return
@@ -101,25 +103,6 @@ const sendMessage = async () => {
   } finally {
     loading.value = false
     scrollToBottom()
-  }
-}
-
-const parseAnimationSteps = (content) => {
-  const steps = []
-  const lines = content.split('\n')
-  let inAlgorithm = false
-  for (const line of lines) {
-    if (line.includes('算法执行过程') || line.includes('动画演示')) {
-      inAlgorithm = true
-      continue
-    }
-    if (inAlgorithm && line.match(/步骤\d+[：:]/)) {
-      const text = line.replace(/[-\s]*/, '').trim()
-      steps.push({ text, progress: 0 })
-    }
-  }
-  if (steps.length > 0) {
-    animationSteps.value = steps
   }
 }
 

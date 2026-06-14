@@ -8,11 +8,17 @@ export {
 };
 
 export {
+    AnimStep,
+    AnimationData,
+    ArrayData,
     ChatSession,
+    DpTableData,
     Message,
     Role,
     SendMessageRequest,
     SendMessageResponse,
     SessionInfo,
-    TokenUsage
+    TokenUsage,
+    TreeData,
+    TreeNodeData
 } from "./models.js";

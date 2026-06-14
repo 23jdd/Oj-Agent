@@ -10,6 +10,268 @@ import { Create as $Create } from "@wailsio/runtime";
 // @ts-ignore: Unused imports
 import * as time$0 from "../time/models.js";
 
+export class AnimStep {
+    /**
+     * Creates a new AnimStep instance.
+     * @param {Partial<AnimStep>} [$$source = {}] - The source object to create the AnimStep.
+     */
+    constructor($$source = {}) {
+        if (!("description" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["description"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number[] | undefined}
+             */
+            this["highlightIdx"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number[] | undefined}
+             */
+            this["compareIdx"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number[] | undefined}
+             */
+            this["resultIdx"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number[] | undefined}
+             */
+            this["swapIdx"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["pointerLeft"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["pointerRight"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number[] | undefined}
+             */
+            this["values"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["row"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["col"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["cellValue"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[][] | undefined}
+             */
+            this["tableGrid"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["nodeId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["nodePath"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AnimStep instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AnimStep}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType0;
+        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
+        const $$createField4_0 = $$createType0;
+        const $$createField7_0 = $$createType0;
+        const $$createField11_0 = $$createType2;
+        const $$createField13_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("highlightIdx" in $$parsedSource) {
+            $$parsedSource["highlightIdx"] = $$createField1_0($$parsedSource["highlightIdx"]);
+        }
+        if ("compareIdx" in $$parsedSource) {
+            $$parsedSource["compareIdx"] = $$createField2_0($$parsedSource["compareIdx"]);
+        }
+        if ("resultIdx" in $$parsedSource) {
+            $$parsedSource["resultIdx"] = $$createField3_0($$parsedSource["resultIdx"]);
+        }
+        if ("swapIdx" in $$parsedSource) {
+            $$parsedSource["swapIdx"] = $$createField4_0($$parsedSource["swapIdx"]);
+        }
+        if ("values" in $$parsedSource) {
+            $$parsedSource["values"] = $$createField7_0($$parsedSource["values"]);
+        }
+        if ("tableGrid" in $$parsedSource) {
+            $$parsedSource["tableGrid"] = $$createField11_0($$parsedSource["tableGrid"]);
+        }
+        if ("nodePath" in $$parsedSource) {
+            $$parsedSource["nodePath"] = $$createField13_0($$parsedSource["nodePath"]);
+        }
+        return new AnimStep(/** @type {Partial<AnimStep>} */($$parsedSource));
+    }
+}
+
+export class AnimationData {
+    /**
+     * Creates a new AnimationData instance.
+     * @param {Partial<AnimationData>} [$$source = {}] - The source object to create the AnimationData.
+     */
+    constructor($$source = {}) {
+        if (!("type" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["type"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {ArrayData | null | undefined}
+             */
+            this["array"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {TreeData | null | undefined}
+             */
+            this["tree"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {DpTableData | null | undefined}
+             */
+            this["table"] = undefined;
+        }
+        if (!("steps" in $$source)) {
+            /**
+             * @member
+             * @type {AnimStep[]}
+             */
+            this["steps"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AnimationData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AnimationData}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType4;
+        const $$createField2_0 = $$createType6;
+        const $$createField3_0 = $$createType8;
+        const $$createField4_0 = $$createType10;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("array" in $$parsedSource) {
+            $$parsedSource["array"] = $$createField1_0($$parsedSource["array"]);
+        }
+        if ("tree" in $$parsedSource) {
+            $$parsedSource["tree"] = $$createField2_0($$parsedSource["tree"]);
+        }
+        if ("table" in $$parsedSource) {
+            $$parsedSource["table"] = $$createField3_0($$parsedSource["table"]);
+        }
+        if ("steps" in $$parsedSource) {
+            $$parsedSource["steps"] = $$createField4_0($$parsedSource["steps"]);
+        }
+        return new AnimationData(/** @type {Partial<AnimationData>} */($$parsedSource));
+    }
+}
+
+export class ArrayData {
+    /**
+     * Creates a new ArrayData instance.
+     * @param {Partial<ArrayData>} [$$source = {}] - The source object to create the ArrayData.
+     */
+    constructor($$source = {}) {
+        if (!("values" in $$source)) {
+            /**
+             * @member
+             * @type {number[]}
+             */
+            this["values"] = [];
+        }
+        if (!("labels" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["labels"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ArrayData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ArrayData}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType0;
+        const $$createField1_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("values" in $$parsedSource) {
+            $$parsedSource["values"] = $$createField0_0($$parsedSource["values"]);
+        }
+        if ("labels" in $$parsedSource) {
+            $$parsedSource["labels"] = $$createField1_0($$parsedSource["labels"]);
+        }
+        return new ArrayData(/** @type {Partial<ArrayData>} */($$parsedSource));
+    }
+}
+
 export class ChatSession {
     /**
      * Creates a new ChatSession instance.
@@ -61,12 +323,69 @@ export class ChatSession {
      * @returns {ChatSession}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType1;
+        const $$createField2_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField2_0($$parsedSource["messages"]);
         }
         return new ChatSession(/** @type {Partial<ChatSession>} */($$parsedSource));
+    }
+}
+
+export class DpTableData {
+    /**
+     * Creates a new DpTableData instance.
+     * @param {Partial<DpTableData>} [$$source = {}] - The source object to create the DpTableData.
+     */
+    constructor($$source = {}) {
+        if (!("rows" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["rows"] = 0;
+        }
+        if (!("cols" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["cols"] = 0;
+        }
+        if (!("rowHeaders" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["rowHeaders"] = [];
+        }
+        if (!("colHeaders" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["colHeaders"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DpTableData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DpTableData}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType1;
+        const $$createField3_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("rowHeaders" in $$parsedSource) {
+            $$parsedSource["rowHeaders"] = $$createField2_0($$parsedSource["rowHeaders"]);
+        }
+        if ("colHeaders" in $$parsedSource) {
+            $$parsedSource["colHeaders"] = $$createField3_0($$parsedSource["colHeaders"]);
+        }
+        return new DpTableData(/** @type {Partial<DpTableData>} */($$parsedSource));
     }
 }
 
@@ -209,6 +528,13 @@ export class SendMessageResponse {
              */
             this["tokenUsage"] = (new TokenUsage());
         }
+        if (!("animation" in $$source)) {
+            /**
+             * @member
+             * @type {AnimationData}
+             */
+            this["animation"] = (new AnimationData());
+        }
 
         Object.assign(this, $$source);
     }
@@ -219,9 +545,10 @@ export class SendMessageResponse {
      * @returns {SendMessageResponse}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType0;
-        const $$createField1_0 = $$createType0;
-        const $$createField3_0 = $$createType2;
+        const $$createField0_0 = $$createType11;
+        const $$createField1_0 = $$createType11;
+        const $$createField3_0 = $$createType13;
+        const $$createField4_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("userMessage" in $$parsedSource) {
             $$parsedSource["userMessage"] = $$createField0_0($$parsedSource["userMessage"]);
@@ -231,6 +558,9 @@ export class SendMessageResponse {
         }
         if ("tokenUsage" in $$parsedSource) {
             $$parsedSource["tokenUsage"] = $$createField3_0($$parsedSource["tokenUsage"]);
+        }
+        if ("animation" in $$parsedSource) {
+            $$parsedSource["animation"] = $$createField4_0($$parsedSource["animation"]);
         }
         return new SendMessageResponse(/** @type {Partial<SendMessageResponse>} */($$parsedSource));
     }
@@ -327,7 +657,123 @@ export class TokenUsage {
     }
 }
 
+export class TreeData {
+    /**
+     * Creates a new TreeData instance.
+     * @param {Partial<TreeData>} [$$source = {}] - The source object to create the TreeData.
+     */
+    constructor($$source = {}) {
+        if (!("nodes" in $$source)) {
+            /**
+             * @member
+             * @type {TreeNodeData[]}
+             */
+            this["nodes"] = [];
+        }
+        if (!("root" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["root"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TreeData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TreeData}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType16;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("nodes" in $$parsedSource) {
+            $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
+        }
+        return new TreeData(/** @type {Partial<TreeData>} */($$parsedSource));
+    }
+}
+
+export class TreeNodeData {
+    /**
+     * Creates a new TreeNodeData instance.
+     * @param {Partial<TreeNodeData>} [$$source = {}] - The source object to create the TreeNodeData.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("value" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["value"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["left"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["right"] = undefined;
+        }
+        if (!("x" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TreeNodeData instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TreeNodeData}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TreeNodeData(/** @type {Partial<TreeNodeData>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
-const $$createType0 = Message.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = TokenUsage.createFrom;
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = $Create.Array($Create.Any);
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = ArrayData.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = TreeData.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = DpTableData.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = AnimStep.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = Message.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = TokenUsage.createFrom;
+const $$createType14 = AnimationData.createFrom;
+const $$createType15 = TreeNodeData.createFrom;
+const $$createType16 = $Create.Array($$createType15);

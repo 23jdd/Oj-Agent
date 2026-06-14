@@ -9,15 +9,13 @@ const activeSessionId = ref('')
 const sessions = ref([])
 const tokenUsage = ref({ sessionTokens: 0, totalTokens: 0 })
 const messages = ref([])
-const isAnimating = ref(false)
-const animationSteps = ref([])
+const animationData = ref(null)
 
 provide('activeSessionId', activeSessionId)
 provide('sessions', sessions)
 provide('tokenUsage', tokenUsage)
 provide('messages', messages)
-provide('isAnimating', isAnimating)
-provide('animationSteps', animationSteps)
+provide('animationData', animationData)
 </script>
 
 <template>
@@ -26,20 +24,15 @@ provide('animationSteps', animationSteps)
       :sessions="sessions"
       :activeId="activeSessionId"
       @select="activeSessionId = $event"
-      @new="activeSessionId = ''; messages = []"
+      @new="activeSessionId = ''; messages = []; animationData = null"
       @delete="onDeleteSession"
     />
     <ChatArea
       :messages="messages"
       :sessionId="activeSessionId"
-      @newMessage="onNewMessage"
     />
     <AnimationPanel
-      :steps="animationSteps"
-      :isAnimating="isAnimating"
-      @play="isAnimating = true"
-      @pause="isAnimating = false"
-      @reset="isAnimating = false"
+      :animationData="animationData"
     />
     <TokenBar :usage="tokenUsage" />
   </div>

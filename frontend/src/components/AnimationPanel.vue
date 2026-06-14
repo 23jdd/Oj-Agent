@@ -1,197 +1,164 @@
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, computed } from 'vue'
+import ArrayRenderer from './anim/ArrayRenderer.vue'
+import TwoPointerRenderer from './anim/TwoPointerRenderer.vue'
+import TreeRenderer from './anim/TreeRenderer.vue'
+import DpTableRenderer from './anim/DpTableRenderer.vue'
 
 const props = defineProps({
-  steps: Array,
-  isAnimating: Boolean
+  animationData: Object,
 })
 
 const emit = defineEmits(['play', 'pause', 'reset'])
 
-const canvasRef = ref(null)
-const containerRef = ref(null)
-const canvasWidth = ref(360)
-const canvasHeight = ref(500)
-const currentStep = ref(-1)
-const progress = ref(0)
+const isPlaying = ref(false)
+const currentStepIndex = ref(-1)
 let animationTimer = null
-let resizeObserver = null
-
 const stepDuration = 2000
-const dpr = window.devicePixelRatio || 1
 
-const updateCanvasSize = () => {
-  if (!containerRef.value) return
-  const rect = containerRef.value.getBoundingClientRect()
-  canvasWidth.value = rect.width - 32
-  canvasHeight.value = rect.height - 32
-}
+const steps = computed(() => props.animationData?.steps || [])
+const animType = computed(() => props.animationData?.type || '')
+const arrayData = computed(() => props.animationData?.array || null)
+const treeData = computed(() => props.animationData?.tree || null)
+const tableData = computed(() => props.animationData?.table || null)
+const currentStep = computed(() => steps.value[currentStepIndex.value] || null)
 
-const startAnimation = () => {
-  if (!props.steps || props.steps.length === 0) return
+const maxStepIndex = computed(() => Math.max(0, steps.value.length - 1))
+const progress = computed(() => currentStepIndex.value >= 0 ? ((currentStepIndex.value + 1) / steps.value.length * 100) : 0)
 
-  if (currentStep.value >= props.steps.length - 1) {
-    currentStep.value = -1
-    progress.value = 0
+const animState = computed(() => ({
+  activeIdx: currentStepIndex.value,
+  totalSteps: steps.value.length,
+}))
+
+function startAnimation() {
+  if (steps.value.length === 0) return
+
+  if (currentStepIndex.value >= steps.value.length - 1) {
+    currentStepIndex.value = -1
   }
 
-  currentStep.value++
-  progress.value = 0
-
-  const stepProgress = setInterval(() => {
-    progress.value += (100 / (stepDuration / 50))
-    if (progress.value >= 100) {
-      progress.value = 100
-      clearInterval(stepProgress)
-    }
-  }, 50)
+  currentStepIndex.value++
+  if (animationTimer) clearTimeout(animationTimer)
 
   animationTimer = setTimeout(() => {
-    clearInterval(stepProgress)
-    progress.value = 0
-    if (currentStep.value < props.steps.length - 1) {
+    if (currentStepIndex.value < steps.value.length - 1 && isPlaying.value) {
       startAnimation()
     } else {
-      emit('pause')
+      pause()
     }
   }, stepDuration)
 }
 
-watch(() => props.isAnimating, (val) => {
-  if (val) {
-    startAnimation()
-  } else {
-    if (animationTimer) clearTimeout(animationTimer)
+function play() {
+  isPlaying.value = true
+  startAnimation()
+}
+
+function pause() {
+  isPlaying.value = false
+  if (animationTimer) clearTimeout(animationTimer)
+}
+
+function stepForward() {
+  if (currentStepIndex.value < steps.value.length - 1) {
+    currentStepIndex.value++
   }
+}
+
+function stepBackward() {
+  if (currentStepIndex.value > 0) {
+    currentStepIndex.value--
+  }
+}
+
+function reset() {
+  pause()
+  currentStepIndex.value = -1
+}
+
+watch(() => props.animationData, () => {
+  reset()
 })
 
-const reset = () => {
-  if (animationTimer) clearTimeout(animationTimer)
-  currentStep.value = -1
-  progress.value = 0
-  emit('reset')
-}
-
-const drawCanvas = () => {
-  const canvas = canvasRef.value
-  if (!canvas) return
-
-  const w = canvasWidth.value
-  const h = canvasHeight.value
-
-  canvas.width = w * dpr
-  canvas.height = h * dpr
-
-  const ctx = canvas.getContext('2d')
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-
-  ctx.clearRect(0, 0, w, h)
-
-  ctx.fillStyle = '#1f2937'
-  ctx.fillRect(0, 0, w, h)
-
-  if (!props.steps || props.steps.length === 0) {
-    ctx.fillStyle = '#6b7280'
-    ctx.font = '14px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.fillText('输入题目后，此处将展示算法执行动画', w / 2, h / 2)
-    return
-  }
-
-  const padding = 20
-  const stepGap = 80
-  const barThickness = 28
-  const startY = 60
-
-  props.steps.forEach((step, idx) => {
-    const y = startY + idx * stepGap
-
-    if (idx <= currentStep.value) {
-      ctx.fillStyle = idx === currentStep.value ? '#3b82f6' : '#1e40af'
-    } else {
-      ctx.fillStyle = '#374151'
-    }
-
-    const barWidth = w - 2 * padding
-    const filledWidth = idx === currentStep.value ? barWidth * (progress.value / 100) : barWidth
-
-    const radius = 6
-    const x = padding
-    const bw = idx <= currentStep.value ? filledWidth : barWidth
-    const bh = barThickness
-
-    ctx.beginPath()
-    ctx.moveTo(x + radius, y)
-    ctx.lineTo(x + bw - radius, y)
-    ctx.quadraticCurveTo(x + bw, y, x + bw, y + radius)
-    ctx.lineTo(x + bw, y + bh - radius)
-    ctx.quadraticCurveTo(x + bw, y + bh, x + bw - radius, y + bh)
-    ctx.lineTo(x + radius, y + bh)
-    ctx.quadraticCurveTo(x, y + bh, x, y + bh - radius)
-    ctx.lineTo(x, y + radius)
-    ctx.quadraticCurveTo(x, y, x + radius, y)
-    ctx.closePath()
-    ctx.fill()
-
-    ctx.fillStyle = idx <= currentStep.value ? '#e5e7eb' : '#9ca3af'
-    ctx.font = `bold ${Math.max(12, Math.min(14, w / 26))}px sans-serif`
-    ctx.textAlign = 'left'
-    ctx.fillText(step.text || `步骤 ${idx + 1}`, padding, y - 12)
-  })
-
-  if (currentStep.value >= 0 && progress.value > 0) {
-    const y = startY + currentStep.value * stepGap + barThickness + 18
-    ctx.fillStyle = '#9ca3af'
-    ctx.font = '12px sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText(`执行中... ${Math.round(progress.value)}%`, padding, y)
-  }
-}
-
 onMounted(() => {
-  updateCanvasSize()
-  drawCanvas()
-
-  resizeObserver = new ResizeObserver(() => {
-    updateCanvasSize()
-    drawCanvas()
-  })
-  if (containerRef.value) {
-    resizeObserver.observe(containerRef.value)
-  }
 })
 
 onBeforeUnmount(() => {
-  if (resizeObserver) resizeObserver.disconnect()
   if (animationTimer) clearTimeout(animationTimer)
 })
 
-watch(() => [props.steps, currentStep.value, progress.value], drawCanvas, { deep: true })
+const rendererComponent = computed(() => {
+  switch (animType.value) {
+    case 'twopointer': return TwoPointerRenderer
+    case 'tree': return TreeRenderer
+    case 'dptable': return DpTableRenderer
+    case 'array':
+    default: return ArrayRenderer
+  }
+})
 </script>
 
 <template>
   <div class="animation-panel">
     <div class="panel-header">
-      <span>动画演示</span>
-      <div class="controls" v-if="steps && steps.length > 0">
-        <button class="ctrl-btn" @click="$emit('play')" title="播放">
+      <span>
+        动画演示
+        <span v-if="animType" class="type-badge">{{ animType }}</span>
+      </span>
+      <div class="controls" v-if="steps.length > 0">
+        <button class="ctrl-btn" @click="stepBackward" :disabled="currentStepIndex <= 0" title="上一步">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button v-if="!isPlaying" class="ctrl-btn" @click="play" title="播放">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
-        <button class="ctrl-btn" @click="$emit('pause')" title="暂停">
+        <button v-else class="ctrl-btn" @click="pause" title="暂停">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
         </button>
-        <button class="ctrl-btn" @click="reset" title="重置">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="20" height="20" rx="2"/></svg>
+        <button class="ctrl-btn" @click="stepForward" :disabled="currentStepIndex >= maxStepIndex" title="下一步">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
         </button>
+        <button class="ctrl-btn reset-btn" @click="reset" title="重置">&#8634;</button>
       </div>
     </div>
-    <div ref="containerRef" class="canvas-container">
-      <canvas ref="canvasRef" :style="{ width: canvasWidth + 'px', height: canvasHeight + 'px' }"></canvas>
+
+    <div class="canvas-container">
+      <div v-if="steps.length === 0" class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="1.5">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+        <p>输入算法题目后，此处将展示解题动画</p>
+      </div>
+
+      <div v-else class="renderer-area">
+        <component
+          :is="rendererComponent"
+          :step="currentStep"
+          :array-data="arrayData"
+          :tree-data="treeData"
+          :table-data="tableData"
+          :anim-state="animState"
+        />
+        <div class="step-description" v-if="currentStep">
+          <span class="step-num">{{ currentStepIndex + 1 }} / {{ steps.length }}</span>
+          {{ currentStep.description }}
+        </div>
+      </div>
     </div>
-    <div v-if="steps && steps.length > 0" class="step-indicator">
-      <div v-for="(step, idx) in steps" :key="idx"
-           :class="['dot', { active: idx <= currentStep, current: idx === currentStep }]"
-      ></div>
+
+    <!-- Progress bar -->
+    <div v-if="steps.length > 0" class="progress-bar-wrap">
+      <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+      <div class="step-dots">
+        <span
+          v-for="(_, i) in steps"
+          :key="i"
+          :class="['dot', { done: i <= currentStepIndex, active: i === currentStepIndex }]"
+          @click="currentStepIndex = i; pause()"
+        ></span>
+      </div>
     </div>
   </div>
 </template>
@@ -216,6 +183,18 @@ watch(() => [props.steps, currentStep.value, progress.value], drawCanvas, { deep
   font-size: 14px;
   font-weight: 600;
   color: #e5e7eb;
+  flex-shrink: 0;
+}
+
+.type-badge {
+  font-size: 11px;
+  font-weight: normal;
+  background: #374151;
+  color: #9ca3af;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+  text-transform: uppercase;
 }
 
 .controls {
@@ -235,12 +214,23 @@ watch(() => [props.steps, currentStep.value, progress.value], drawCanvas, { deep
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  font-size: 16px;
 }
 
-.ctrl-btn:hover {
+.ctrl-btn:hover:not(:disabled) {
   background: #374151;
   color: #e5e7eb;
   border-color: #4b5563;
+}
+
+.ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reset-btn {
+  font-family: sans-serif;
+  font-size: 18px;
 }
 
 .canvas-container {
@@ -248,21 +238,70 @@ watch(() => [props.steps, currentStep.value, progress.value], drawCanvas, { deep
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: auto;
   padding: 16px;
-  overflow: hidden;
 }
 
-.canvas-container canvas {
-  border-radius: 8px;
+.empty-state {
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-state svg {
+  margin: 0 auto 12px;
   display: block;
 }
 
-.step-indicator {
+.empty-state p {
+  font-size: 13px;
+  max-width: 200px;
+  line-height: 1.5;
+}
+
+.renderer-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.step-description {
+  text-align: center;
+  font-size: 13px;
+  color: #d1d5db;
+  line-height: 1.4;
+  padding: 8px 16px;
+  background: #111827;
+  border-radius: 8px;
+  max-width: 90%;
+}
+
+.step-num {
+  font-size: 11px;
+  color: #6b7280;
+  margin-right: 8px;
+}
+
+.progress-bar-wrap {
+  flex-shrink: 0;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #2d3748;
+  position: relative;
+}
+
+.progress-bar {
+  height: 3px;
+  background: #3b82f6;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  margin-bottom: 8px;
+}
+
+.step-dots {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid #2d3748;
+  gap: 6px;
 }
 
 .dot {
@@ -270,15 +309,21 @@ watch(() => [props.steps, currentStep.value, progress.value], drawCanvas, { deep
   height: 8px;
   border-radius: 50%;
   background: #374151;
+  cursor: pointer;
   transition: all 0.3s;
 }
 
-.dot.active {
+.dot:hover {
+  background: #6b7280;
+}
+
+.dot.done {
   background: #1e40af;
 }
 
-.dot.current {
+.dot.active {
   background: #3b82f6;
   box-shadow: 0 0 6px #3b82f6;
+  transform: scale(1.3);
 }
 </style>

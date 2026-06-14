@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -37,10 +38,11 @@ type SendMessageRequest struct {
 }
 
 type SendMessageResponse struct {
-	UserMessage      Message    `json:"userMessage"`
-	AssistantMessage Message    `json:"assistantMessage"`
-	SessionID        string     `json:"sessionId"`
-	TokenUsage       TokenUsage `json:"tokenUsage"`
+	UserMessage      Message       `json:"userMessage"`
+	AssistantMessage Message       `json:"assistantMessage"`
+	SessionID        string        `json:"sessionId"`
+	TokenUsage       TokenUsage    `json:"tokenUsage"`
+	Animation        AnimationData `json:"animation"`
 }
 
 type TokenUsage struct {
@@ -55,6 +57,64 @@ type SessionInfo struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 	MsgCount  int       `json:"msgCount"`
 }
+
+// ---- Animation Data Types ----
+
+type AnimationData struct {
+	Type  string       `json:"type"`
+	Array *ArrayData   `json:"array,omitempty"`
+	Tree  *TreeData    `json:"tree,omitempty"`
+	Table *DpTableData `json:"table,omitempty"`
+	Steps []AnimStep   `json:"steps"`
+}
+
+type ArrayData struct {
+	Values []int    `json:"values"`
+	Labels []string `json:"labels"`
+}
+
+type TreeNodeData struct {
+	ID    string `json:"id"`
+	Value string `json:"value"`
+	Left  string `json:"left,omitempty"`
+	Right string `json:"right,omitempty"`
+	X     int    `json:"x"`
+	Y     int    `json:"y"`
+}
+
+type TreeData struct {
+	Nodes []TreeNodeData `json:"nodes"`
+	Root  string         `json:"root"`
+}
+
+type DpTableData struct {
+	Rows       int      `json:"rows"`
+	Cols       int      `json:"cols"`
+	RowHeaders []string `json:"rowHeaders"`
+	ColHeaders []string `json:"colHeaders"`
+}
+
+type AnimStep struct {
+	Description string   `json:"description"`
+
+	HighlightIdx []int  `json:"highlightIdx,omitempty"`
+	CompareIdx   []int  `json:"compareIdx,omitempty"`
+	ResultIdx    []int  `json:"resultIdx,omitempty"`
+	SwapIdx      []int  `json:"swapIdx,omitempty"`
+	PointerLeft  int    `json:"pointerLeft,omitempty"`
+	PointerRight int    `json:"pointerRight,omitempty"`
+	Values       []int  `json:"values,omitempty"`
+
+	Row       int    `json:"row,omitempty"`
+	Col       int    `json:"col,omitempty"`
+	CellValue string `json:"cellValue,omitempty"`
+	TableGrid [][]string `json:"tableGrid,omitempty"`
+
+	NodeID   string   `json:"nodeId,omitempty"`
+	NodePath []string `json:"nodePath,omitempty"`
+}
+
+// ---- ChatService ----
 
 type ChatService struct {
 	mu          sync.Mutex
@@ -130,18 +190,15 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 		c.sessions[req.SessionID] = session
 	}
 
-	userMsg := Message{
-		Role:    RoleUser,
-		Content: req.Content,
-		Time:    time.Now(),
-	}
+	userMsg := Message{Role: RoleUser, Content: req.Content, Time: time.Now()}
 	session.Messages = append(session.Messages, userMsg)
 
 	if len(session.Messages) == 2 {
 		session.Title = truncateString(req.Content, 30)
 	}
 
-	assistantMsg := c.generateMockResponse(req)
+	problemType := detectProblemType(req.Content)
+	assistantMsg, animData := c.generateResponse(req, problemType)
 	session.Messages = append(session.Messages, assistantMsg)
 	session.UpdatedAt = time.Now()
 
@@ -158,68 +215,236 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 			SessionTokens: sessionTokens,
 			TotalTokens:   c.totalTokens,
 		},
+		Animation: animData,
 	}
 }
 
 func (c *ChatService) GetTokenUsage() TokenUsage {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return TokenUsage{
-		SessionTokens: 0,
-		TotalTokens:   c.totalTokens,
+	return TokenUsage{TotalTokens: c.totalTokens}
+}
+
+// ---- Problem Detection ----
+
+func detectProblemType(content string) string {
+	lower := strings.ToLower(content)
+	switch {
+	case strings.Contains(lower, "两数之和") || strings.Contains(lower, "two sum"):
+		return "array"
+	case strings.Contains(lower, "回文") || strings.Contains(lower, "palindrom"):
+		return "twopointer"
+	case strings.Contains(lower, "二分") || strings.Contains(lower, "binary search"):
+		return "array"
+	case strings.Contains(lower, "二叉树") || strings.Contains(lower, "binary tree") || strings.Contains(lower, "遍历"):
+		return "tree"
+	case strings.Contains(lower, "动态规划") || strings.Contains(lower, "dp") || strings.Contains(lower, "背包") || strings.Contains(lower, "斐波那契"):
+		return "dptable"
+	case strings.Contains(lower, "链表") || strings.Contains(lower, "linked list"):
+		return "array"
+	case strings.Contains(lower, "图") || strings.Contains(lower, "graph") || strings.Contains(lower, "dfs") || strings.Contains(lower, "bfs"):
+		return "graph"
+	case strings.Contains(lower, "滑动窗口") || strings.Contains(lower, "sliding window"):
+		return "twopointer"
+	case strings.Contains(lower, "双指针") || strings.Contains(lower, "two pointer"):
+		return "twopointer"
+	case strings.Contains(lower, "排序") || strings.Contains(lower, "sort"):
+		return "array"
+	default:
+		types := []string{"array", "twopointer", "tree", "dptable"}
+		return types[rand.Intn(len(types))]
 	}
 }
 
-func (c *ChatService) generateMockResponse(req SendMessageRequest) Message {
-	algorithms := []string{
-		"双指针",
-		"哈希表",
-		"动态规划",
-		"贪心算法",
-		"广度优先搜索",
-		"深度优先搜索",
-		"二分查找",
-		"滑动窗口",
-		"前缀和",
-		"单调栈",
+// ---- Response Generation ----
+
+func (c *ChatService) generateResponse(req SendMessageRequest, probType string) (Message, AnimationData) {
+	switch probType {
+	case "tree":
+		return c.genTreeResponse(req)
+	case "dptable":
+		return c.genDpResponse(req)
+	case "twopointer":
+		return c.genTwoPointerResponse(req)
+	default:
+		return c.genArrayResponse(req)
+	}
+}
+
+func (c *ChatService) genArrayResponse(req SendMessageRequest) (Message, AnimationData) {
+	values := []int{2, 7, 11, 15, 3, 8, 5}
+	code := fmt.Sprintf("```%s\nfunc twoSum(nums []int, target int) []int {\n    m := make(map[int]int)\n    for i, v := range nums {\n        if j, ok := m[target-v]; ok {\n            return []int{j, i}\n        }\n        m[v] = i\n    }\n    return nil\n}\n```", req.Language)
+
+	content := fmt.Sprintf(`## 题目分析
+这是一个典型的**哈希表查找**问题，需要从数组中找出两个数之和等于目标值。
+
+## 解题思路
+使用哈希表存储已遍历元素的值和索引，实现 O(n) 时间复杂度。
+- 时间复杂度：O(n)
+- 空间复杂度：O(n)
+
+## 算法步骤
+1. 初始化哈希表 map[2:0]
+2. 遍历 nums[1]=7，查找 map 中是否有 target-7=2，命中！返回 [0,1]
+
+## 代码实现
+%s`, code)
+
+	anim := AnimationData{
+		Type: "array",
+		Array: &ArrayData{
+			Values: values,
+			Labels: []string{"i=0", "i=1", "i=2", "i=3", "i=4", "i=5", "i=6"},
+		},
+		Steps: []AnimStep{
+			{Description: "初始数组", Values: values, HighlightIdx: nil},
+			{Description: "i=0, v=2, 存入哈希表", Values: values, HighlightIdx: []int{0}},
+			{Description: "i=1, v=7, 查找 target-7=2", Values: values, CompareIdx: []int{0, 1}},
+			{Description: "在哈希表中找到2，返回[0,1]", Values: values, ResultIdx: []int{0, 1}},
+		},
 	}
 
-	alg := algorithms[rand.Intn(len(algorithms))]
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
+}
 
-	code := fmt.Sprintf("```%s\nfunc solve(nums []int) int {\n    // %s 解法\n    result := 0\n    return result\n}\n```", req.Language, alg)
+func (c *ChatService) genTwoPointerResponse(req SendMessageRequest) (Message, AnimationData) {
+	values := []int{1, 8, 6, 2, 5, 4, 8, 3, 7}
+	code := fmt.Sprintf("```%s\nfunc maxArea(height []int) int {\n    left, right := 0, len(height)-1\n    maxArea := 0\n    for left < right {\n        h := min(height[left], height[right])\n        area := h * (right - left)\n        if area > maxArea { maxArea = area }\n        if height[left] < height[right] { left++ } else { right-- }\n    }\n    return maxArea\n}\n```", req.Language)
 
-	response := fmt.Sprintf(`## 解题思路
+	content := fmt.Sprintf(`## 题目分析
+**盛最多水的容器**，使用双指针从两端向中间收缩。
 
-这道题可以使用 **%s** 来解决。
-
-### 核心思想
-1. 分析问题的性质和约束条件
-2. 选择合适的数据结构
-3. 设计高效的算法流程
-
-### 时间复杂度
+## 解题思路
+左右指针分别指向数组两端，每次移动较矮的一侧，计算并更新最大面积。
 - 时间复杂度：O(n)
 - 空间复杂度：O(1)
 
-### 代码实现
+## 算法步骤
+1. left=0(value=1), right=8(value=7), area=1*8=8
+2. left 矮，left++ → left=1(value=8)
+3. left=1(8), right=8(7), area=7*7=49, 更新 maxArea=49
+4. right 矮，right-- → right=7(value=3)
+5. 继续移动直到 left >= right，最终 maxArea=49
 
-%s
+## 代码实现
+%s`, code)
 
-### 动画演示
-算法的执行过程如下：
-- 步骤1：初始化指针/变量
-- 步骤2：遍历数据，根据条件移动指针
-- 步骤3：更新结果
-- 步骤4：返回最终答案
-
-> 提示：右侧动画区将展示完整的算法执行过程。`, alg, code)
-
-	return Message{
-		Role:    RoleAssistant,
-		Content: response,
-		Time:    time.Now(),
+	anim := AnimationData{
+		Type: "twopointer",
+		Array: &ArrayData{
+			Values: values,
+			Labels: []string{"L", "", "", "", "", "", "", "R", ""},
+		},
+		Steps: []AnimStep{
+			{Description: "初始化 L=0, R=8", Values: values, PointerLeft: 0, PointerRight: 8, HighlightIdx: []int{0, 8}},
+			{Description: "h=min(1,7)=1, area=8", Values: values, PointerLeft: 0, PointerRight: 8, CompareIdx: []int{0, 8}},
+			{Description: "左矮，L++ → L=1", Values: values, PointerLeft: 1, PointerRight: 8, HighlightIdx: []int{1, 8}},
+			{Description: "h=min(8,7)=7, area=49", Values: values, PointerLeft: 1, PointerRight: 8, CompareIdx: []int{1, 8}},
+			{Description: "右矮，R-- → R=7", Values: values, PointerLeft: 1, PointerRight: 7, HighlightIdx: []int{1, 7}},
+			{Description: "L=1, R=7, h=min(8,3)=3, area=18", Values: values, PointerLeft: 1, PointerRight: 7, CompareIdx: []int{1, 7}},
+			{Description: "最终 maxArea=49", Values: values, ResultIdx: []int{1, 8}},
+		},
 	}
+
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
 }
+
+func (c *ChatService) genTreeResponse(req SendMessageRequest) (Message, AnimationData) {
+	code := fmt.Sprintf("```%s\ntype TreeNode struct {\n    Val   int\n    Left  *TreeNode\n    Right *TreeNode\n}\n\nfunc inorderTraversal(root *TreeNode) []int {\n    var result []int\n    var dfs func(*TreeNode)\n    dfs = func(node *TreeNode) {\n        if node == nil { return }\n        dfs(node.Left)\n        result = append(result, node.Val)\n        dfs(node.Right)\n    }\n    dfs(root)\n    return result\n}\n```", req.Language)
+
+	content := fmt.Sprintf(`## 题目分析
+**二叉树的中序遍历**，按照 左→根→右 的顺序遍历所有节点。
+
+## 解题思路
+使用递归 DFS，先递归左子树，再访问根节点，最后递归右子树。
+- 时间复杂度：O(n)
+- 空间复杂度：O(h)，h 为树高
+
+## 算法步骤
+1. 从根节点1开始，递归进入左子树
+2. 访问节点2，递归进入左子树
+3. 访问节点4，无左子树，输出 4
+4. 回溯到2，输出 2
+5. 进入2的右子树，访问节点5，输出 5
+6. 回溯到1，输出 1
+7. 进入1的右子树，访问节点3，输出 3
+8. 遍历完成：中序结果 [4, 2, 5, 1, 3]
+
+## 代码实现
+%s`, code)
+
+	nodes := []TreeNodeData{
+		{ID: "1", Value: "1", Left: "2", Right: "3", X: 300, Y: 40},
+		{ID: "2", Value: "2", Left: "4", Right: "5", X: 180, Y: 140},
+		{ID: "3", Value: "3", Left: "", Right: "", X: 420, Y: 140},
+		{ID: "4", Value: "4", Left: "", Right: "", X: 100, Y: 240},
+		{ID: "5", Value: "5", Left: "", Right: "", X: 260, Y: 240},
+	}
+
+	anim := AnimationData{
+		Type: "tree",
+		Tree: &TreeData{Nodes: nodes, Root: "1"},
+		Steps: []AnimStep{
+			{Description: "从根节点 1 开始", NodeID: "1", NodePath: []string{"1"}},
+			{Description: "递归进入左子树，访问节点 2", NodeID: "2", NodePath: []string{"1", "2"}},
+			{Description: "递归进入左子树，访问节点 4", NodeID: "4", NodePath: []string{"1", "2", "4"}},
+			{Description: "节点 4 无左子树，输出 4", NodeID: "4", NodePath: []string{"1", "2", "4"}},
+			{Description: "回溯到节点 2，输出 2", NodeID: "2", NodePath: []string{"1", "2"}},
+			{Description: "进入节点 5，输出 5", NodeID: "5", NodePath: []string{"1", "2", "5"}},
+			{Description: "回溯到根节点 1，输出 1", NodeID: "1", NodePath: []string{"1"}},
+			{Description: "进入右子树，访问节点 3，输出 3", NodeID: "3", NodePath: []string{"1", "3"}},
+		},
+	}
+
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
+}
+
+func (c *ChatService) genDpResponse(req SendMessageRequest) (Message, AnimationData) {
+	code := fmt.Sprintf("```%s\nfunc knapsack(weights []int, values []int, capacity int) int {\n    n := len(weights)\n    dp := make([][]int, n+1)\n    for i := range dp {\n        dp[i] = make([]int, capacity+1)\n    }\n    for i := 1; i <= n; i++ {\n        for j := 0; j <= capacity; j++ {\n            if weights[i-1] > j {\n                dp[i][j] = dp[i-1][j]\n            } else {\n                dp[i][j] = max(dp[i-1][j], dp[i-1][j-weights[i-1]]+values[i-1])\n            }\n        }\n    }\n    return dp[n][capacity]\n}\n```", req.Language)
+
+	content := fmt.Sprintf(`## 题目分析
+**0/1 背包问题**，经典动态规划，选择物品使总价值最大且不超过容量。
+
+## 解题思路
+dp[i][j] 表示前 i 个物品放入容量 j 的最大价值。
+状态转移：dp[i][j] = max(dp[i-1][j], dp[i-1][j-w[i-1]] + v[i-1])
+- 时间复杂度：O(n * capacity)
+- 空间复杂度：O(n * capacity)
+
+## 代码实现
+%s`, code)
+
+	// weights=[2,3,4], values=[3,4,5], capacity=5
+	grid := [][]string{
+		{"0", "0", "0", "0", "0", "0"},
+		{"0", "0", "3", "3", "3", "3"},
+		{"0", "0", "3", "4", "4", "7"},
+		{"0", "0", "3", "4", "5", "7"},
+	}
+
+	anim := AnimationData{
+		Type: "dptable",
+		Table: &DpTableData{
+			Rows:       4,
+			Cols:       6,
+			RowHeaders: []string{"0", "物品1(2kg/3¥)", "物品2(3kg/4¥)", "物品3(4kg/5¥)"},
+			ColHeaders: []string{"0", "1", "2", "3", "4", "5"},
+		},
+		Steps: []AnimStep{
+			{Description: "初始化 dp 表，dp[0][*] = 0", TableGrid: grid, Row: 0, Col: -1},
+			{Description: "i=1, j=2: w[0]=2≤2, dp=3", TableGrid: grid, Row: 1, Col: 2, CellValue: "3"},
+			{Description: "i=1: 容量<2 时不可选，dp=0", TableGrid: grid, Row: 1, Col: 1},
+			{Description: "i=2, j=3: max(dp[1][3]=3, dp[1][0]+4=4)=4", TableGrid: grid, Row: 2, Col: 3, CellValue: "4"},
+			{Description: "i=2, j=5: max(dp[1][5]=3, dp[1][2]+4=7)=7", TableGrid: grid, Row: 2, Col: 5, CellValue: "7"},
+			{Description: "i=3, j=4: max(dp[2][4]=4, dp[2][0]+5=5)=5", TableGrid: grid, Row: 3, Col: 4, CellValue: "5"},
+			{Description: "最终答案 dp[3][5] = 7", TableGrid: grid, Row: 3, Col: 5, CellValue: "7"},
+		},
+	}
+
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
+}
+
+// ---- Helpers ----
 
 func estimateTokens(text string) int {
 	return len([]rune(text)) * 2 / 3
@@ -234,3 +459,4 @@ func truncateString(s string, maxLen int) string {
 }
 
 var _ = strings.TrimSpace
+var _ = json.Marshal
