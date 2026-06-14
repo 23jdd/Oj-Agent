@@ -16,6 +16,18 @@ const (
 	RoleAssistant Role = "assistant"
 )
 
+type Style string
+
+const (
+	StyleNormal    Style = "normal"
+	StyleHighlight Style = "highlight"
+	StyleCompare   Style = "compare"
+	StyleSwap      Style = "swap"
+	StyleResult    Style = "result"
+	StylePivot     Style = "pivot"
+	StyleDim       Style = "dim"
+)
+
 type Message struct {
 	Role    Role      `json:"role"`
 	Content string    `json:"content"`
@@ -38,11 +50,11 @@ type SendMessageRequest struct {
 }
 
 type SendMessageResponse struct {
-	UserMessage      Message       `json:"userMessage"`
-	AssistantMessage Message       `json:"assistantMessage"`
-	SessionID        string        `json:"sessionId"`
-	TokenUsage       TokenUsage    `json:"tokenUsage"`
-	Animation        AnimationData `json:"animation"`
+	UserMessage      Message     `json:"userMessage"`
+	AssistantMessage Message     `json:"assistantMessage"`
+	SessionID        string      `json:"sessionId"`
+	TokenUsage       TokenUsage  `json:"tokenUsage"`
+	Animation        UnifiedAnim `json:"animation"`
 }
 
 type TokenUsage struct {
@@ -58,79 +70,76 @@ type SessionInfo struct {
 	MsgCount  int       `json:"msgCount"`
 }
 
-// ---- Animation Data Types ----
+// ---- Unified Animation Types ----
 
-type AnimationData struct {
-	Type string          `json:"type"`
-	Array *ArrayData     `json:"array,omitempty"`
-	Tree  *TreeData      `json:"tree,omitempty"`
-	Table *DpTableData   `json:"table,omitempty"`
-	List  *LinkedListData `json:"list,omitempty"`
-	Steps []AnimStep     `json:"steps"`
+type UnifiedAnim struct {
+	Elements  []Element `json:"elements"`
+	Frames    []Frame   `json:"frames"`
+	SVGWidth  float64   `json:"svgW"`
+	SVGHeight float64   `json:"svgH"`
 }
 
-type ArrayData struct {
-	Values []int    `json:"values"`
-	Labels []string `json:"labels"`
+type Element struct {
+	ID      string  `json:"id"`
+	Kind    string  `json:"kind"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	W       float64 `json:"w,omitempty"`
+	H       float64 `json:"h,omitempty"`
+	R       float64 `json:"r,omitempty"`
+	X2      float64 `json:"x2,omitempty"`
+	Y2      float64 `json:"y2,omitempty"`
+	Text    string  `json:"text,omitempty"`
+	Style   string  `json:"style,omitempty"`
+	RX      float64 `json:"rx,omitempty"`
+	Visible bool    `json:"visible"`
+	Points  string  `json:"points,omitempty"`
+	Arrow   bool    `json:"arrow,omitempty"`
 }
 
-type TreeNodeData struct {
-	ID    string `json:"id"`
-	Value string `json:"value"`
-	Left  string `json:"left,omitempty"`
-	Right string `json:"right,omitempty"`
-	X     int    `json:"x"`
-	Y     int    `json:"y"`
+type Frame struct {
+	Description string                 `json:"desc"`
+	Delta       map[string]interface{} `json:"delta"`
 }
 
-type TreeData struct {
-	Nodes []TreeNodeData `json:"nodes"`
-	Root  string         `json:"root"`
+// ---- Helpers for building animations ----
+
+func rect(id string, x, y, w, h float64, text string, style string, rx float64, visible bool) Element {
+	if style == "" {
+		style = string(StyleNormal)
+	}
+	return Element{ID: id, Kind: "rect", X: x, Y: y, W: w, H: h, Text: text, Style: style, RX: rx, Visible: visible}
 }
 
-type DpTableData struct {
-	Rows       int      `json:"rows"`
-	Cols       int      `json:"cols"`
-	RowHeaders []string `json:"rowHeaders"`
-	ColHeaders []string `json:"colHeaders"`
+func circle(id string, cx, cy, r float64, text, style string, visible bool) Element {
+	return Element{ID: id, Kind: "circle", X: cx, Y: cy, R: r, Text: text, Style: style, Visible: visible}
 }
 
-type ListNodeData struct {
-	ID    string `json:"id"`
-	Value string `json:"value"`
-	Next  string `json:"next,omitempty"`
-	X     int    `json:"x"`
-	Y     int    `json:"y"`
+func line(id string, x1, y1, x2, y2 float64, style string, arrow bool) Element {
+	return Element{ID: id, Kind: "line", X: x1, Y: y1, X2: x2, Y2: y2, Style: style, Arrow: arrow, Visible: true}
 }
 
-type LinkedListData struct {
-	Nodes []ListNodeData `json:"nodes"`
-	Head  string         `json:"head"`
+func label(id string, x, y float64, text, style string) Element {
+	return Element{ID: id, Kind: "label", X: x, Y: y, Text: text, Style: style, Visible: true}
 }
 
-type AnimStep struct {
-	Description string   `json:"description"`
-
-	HighlightIdx []int  `json:"highlightIdx,omitempty"`
-	CompareIdx   []int  `json:"compareIdx,omitempty"`
-	ResultIdx    []int  `json:"resultIdx,omitempty"`
-	SwapIdx      []int  `json:"swapIdx,omitempty"`
-	PivotIdx     int    `json:"pivotIdx,omitempty"`
-	PointerLeft  int    `json:"pointerLeft,omitempty"`
-	PointerRight int    `json:"pointerRight,omitempty"`
-	PointerMid   int    `json:"pointerMid,omitempty"`
-	WindowStart  int    `json:"windowStart,omitempty"`
-	WindowEnd    int    `json:"windowEnd,omitempty"`
-	Values       []int  `json:"values,omitempty"`
-
-	Row       int        `json:"row,omitempty"`
-	Col       int        `json:"col,omitempty"`
-	CellValue string     `json:"cellValue,omitempty"`
-	TableGrid [][]string `json:"tableGrid,omitempty"`
-
-	NodeID    string         `json:"nodeId,omitempty"`
-	NodePath  []string       `json:"nodePath,omitempty"`
-	ListNodes []ListNodeData `json:"listNodes,omitempty"`
+func setX(v float64) map[string]interface{}   { return map[string]interface{}{"x": v} }
+func setY(v float64) map[string]interface{}   { return map[string]interface{}{"y": v} }
+func setXY(x, y float64) map[string]interface{} {
+	return map[string]interface{}{"x": x, "y": y}
+}
+func setXYWH(x, y, w, h float64) map[string]interface{} {
+	return map[string]interface{}{"x": x, "y": y, "w": w, "h": h}
+}
+func setLine(x1, y1, x2, y2 float64) map[string]interface{} {
+	return map[string]interface{}{"x": x1, "y": y1, "x2": x2, "y2": y2}
+}
+func setText(v string) map[string]interface{}  { return map[string]interface{}{"text": v} }
+func setStyle(v Style) map[string]interface{}   { return map[string]interface{}{"style": string(v)} }
+func setColor(v string) map[string]interface{} { return map[string]interface{}{"style": v} }
+func setVisible(v bool) map[string]interface{}  { return map[string]interface{}{"visible": v} }
+func setXYText(x, y float64, text string) map[string]interface{} {
+	return map[string]interface{}{"x": x, "y": y, "text": text}
 }
 
 // ---- ChatService ----
@@ -150,14 +159,10 @@ func NewChatService() *ChatService {
 func (c *ChatService) NewSession() *ChatSession {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	id := fmt.Sprintf("session_%d", time.Now().UnixNano())
 	session := &ChatSession{
-		ID:        id,
-		Title:     "新对话",
-		Messages:  []Message{},
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID: id, Title: "新对话", Messages: []Message{},
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	c.sessions[id] = session
 	return session
@@ -166,15 +171,11 @@ func (c *ChatService) NewSession() *ChatSession {
 func (c *ChatService) GetSessions() []SessionInfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	result := make([]SessionInfo, 0, len(c.sessions))
 	for _, s := range c.sessions {
 		result = append(result, SessionInfo{
-			ID:        s.ID,
-			Title:     s.Title,
-			CreatedAt: s.CreatedAt,
-			UpdatedAt: s.UpdatedAt,
-			MsgCount:  len(s.Messages),
+			ID: s.ID, Title: s.Title, CreatedAt: s.CreatedAt,
+			UpdatedAt: s.UpdatedAt, MsgCount: len(s.Messages),
 		})
 	}
 	return result
@@ -200,24 +201,20 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 	session, ok := c.sessions[req.SessionID]
 	if !ok {
 		session = &ChatSession{
-			ID:        req.SessionID,
-			Title:     req.Content,
-			Messages:  []Message{},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
+			ID: req.SessionID, Title: req.Content, Messages: []Message{},
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
 		}
 		c.sessions[req.SessionID] = session
 	}
 
 	userMsg := Message{Role: RoleUser, Content: req.Content, Time: time.Now()}
 	session.Messages = append(session.Messages, userMsg)
-
 	if len(session.Messages) == 2 {
 		session.Title = truncateString(req.Content, 30)
 	}
 
 	problemType := detectProblemType(req.Content)
-	assistantMsg, animData := c.generateResponse(req, problemType)
+	assistantMsg, anim := c.generateUnifiedResponse(req, problemType)
 	session.Messages = append(session.Messages, assistantMsg)
 	session.UpdatedAt = time.Now()
 
@@ -230,11 +227,8 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 		UserMessage:      userMsg,
 		AssistantMessage: assistantMsg,
 		SessionID:        session.ID,
-		TokenUsage: TokenUsage{
-			SessionTokens: sessionTokens,
-			TotalTokens:   c.totalTokens,
-		},
-		Animation: animData,
+		TokenUsage:       TokenUsage{SessionTokens: sessionTokens, TotalTokens: c.totalTokens},
+		Animation:        anim,
 	}
 }
 
@@ -244,353 +238,515 @@ func (c *ChatService) GetTokenUsage() TokenUsage {
 	return TokenUsage{TotalTokens: c.totalTokens}
 }
 
-// ---- Problem Detection ----
-
 func detectProblemType(content string) string {
 	lower := strings.ToLower(content)
 	switch {
-	case strings.Contains(lower, "两数之和") || strings.Contains(lower, "two sum"):
-		return "array"
-	case strings.Contains(lower, "回文") || strings.Contains(lower, "palindrom"):
-		return "twopointer"
-	case strings.Contains(lower, "二分") || strings.Contains(lower, "binary search"):
-		return "array"
-	case strings.Contains(lower, "二叉树") || strings.Contains(lower, "binary tree") || strings.Contains(lower, "遍历"):
+	case strings.Contains(lower, "二叉树") || strings.Contains(lower, "binary tree") || strings.Contains(lower, "中序") || strings.Contains(lower, "前序") || strings.Contains(lower, "后序") || strings.Contains(lower, "层序"):
 		return "tree"
 	case strings.Contains(lower, "动态规划") || strings.Contains(lower, "dp") || strings.Contains(lower, "背包") || strings.Contains(lower, "斐波那契"):
 		return "dptable"
-	case strings.Contains(lower, "链表") || strings.Contains(lower, "linked list") || strings.Contains(lower, "反转链表"):
+	case strings.Contains(lower, "链表") || strings.Contains(lower, "linked list") || strings.Contains(lower, "反转"):
 		return "linkedlist"
-	case strings.Contains(lower, "图") || strings.Contains(lower, "graph") || strings.Contains(lower, "dfs") || strings.Contains(lower, "bfs"):
-		return "graph"
 	case strings.Contains(lower, "滑动窗口") || strings.Contains(lower, "sliding window"):
 		return "slidingwindow"
-	case strings.Contains(lower, "双指针") || strings.Contains(lower, "two pointer"):
-		return "twopointer"
 	case strings.Contains(lower, "排序") || strings.Contains(lower, "sort") || strings.Contains(lower, "快排") || strings.Contains(lower, "冒泡") || strings.Contains(lower, "归并"):
 		return "sorting"
+	case strings.Contains(lower, "双指针") || strings.Contains(lower, "two pointer") || strings.Contains(lower, "回文") || strings.Contains(lower, "盛水"):
+		return "twopointer"
+	case strings.Contains(lower, "图") || strings.Contains(lower, "graph") || strings.Contains(lower, "dfs") || strings.Contains(lower, "bfs"):
+		return "graph"
 	default:
 		types := []string{"array", "twopointer", "tree", "dptable"}
 		return types[rand.Intn(len(types))]
 	}
 }
 
-// ---- Response Generation ----
-
-func (c *ChatService) generateResponse(req SendMessageRequest, probType string) (Message, AnimationData) {
+func (c *ChatService) generateUnifiedResponse(req SendMessageRequest, probType string) (Message, UnifiedAnim) {
 	switch probType {
 	case "tree":
-		return c.genTreeResponse(req)
+		return c.genTreeUnified(req)
 	case "dptable":
-		return c.genDpResponse(req)
-	case "twopointer":
-		return c.genTwoPointerResponse(req)
+		return c.genDpUnified(req)
 	case "linkedlist":
-		return c.genLinkedListResponse(req)
+		return c.genLinkedListUnified(req)
 	case "slidingwindow":
-		return c.genSlidingWindowResponse(req)
+		return c.genSlidingWindowUnified(req)
 	case "sorting":
-		return c.genSortingResponse(req)
+		return c.genSortingUnified(req)
+	case "twopointer":
+		return c.genTwoPointerUnified(req)
 	default:
-		return c.genArrayResponse(req)
+		return c.genArrayUnified(req)
 	}
 }
 
-func (c *ChatService) genArrayResponse(req SendMessageRequest) (Message, AnimationData) {
-	values := []int{2, 7, 11, 15, 3, 8, 5}
+// ---- Unified Animation Generators ----
+
+func (c *ChatService) genArrayUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	vals := []int{2, 7, 11, 15, 3, 8, 5}
 	code := fmt.Sprintf("```%s\nfunc twoSum(nums []int, target int) []int {\n    m := make(map[int]int)\n    for i, v := range nums {\n        if j, ok := m[target-v]; ok {\n            return []int{j, i}\n        }\n        m[v] = i\n    }\n    return nil\n}\n```", req.Language)
-
 	content := fmt.Sprintf(`## 题目分析
-这是一个典型的**哈希表查找**问题，需要从数组中找出两个数之和等于目标值。
+使用**哈希表**以 O(n) 时间找出两数之和等于目标值。
 
 ## 解题思路
-使用哈希表存储已遍历元素的值和索引，实现 O(n) 时间复杂度。
-- 时间复杂度：O(n)
-- 空间复杂度：O(n)
+遍历数组，每次检查 target-当前值 是否已在哈希表中。
 
 ## 算法步骤
-1. 初始化哈希表 map[2:0]
-2. 遍历 nums[1]=7，查找 map 中是否有 target-7=2，命中！返回 [0,1]
+1. i=0, v=2, 存入 map{2:0}
+2. i=1, v=7, 查找 target-7=2，命中 map！返回 [0,1]
 
 ## 代码实现
 %s`, code)
 
-	anim := AnimationData{
-		Type: "array",
-		Array: &ArrayData{
-			Values: values,
-			Labels: []string{"i=0", "i=1", "i=2", "i=3", "i=4", "i=5", "i=6"},
+	bw, bh, gap := 48.0, 42.0, 56.0
+	padL, padT := 30.0, 30.0
+	n := len(vals)
+
+	elements := []Element{}
+	for i, v := range vals {
+		elements = append(elements,
+			rect(fmt.Sprintf("cell_%d", i), padL+float64(i)*gap, padT, bw, bh, fmt.Sprint(v), string(StyleNormal), 6, true),
+		)
+	}
+	elements = append(elements,
+		label("hash_hint", padL, padT+bh+36, "哈希表: {}", string(StyleDim)),
+	)
+
+	frames := []Frame{
+		{Description: "初始数组", Delta: map[string]interface{}{}},
+		{
+			Description: "i=0, v=2, 存入哈希表",
+			Delta: map[string]interface{}{
+				"cell_0":    setStyle(StyleHighlight),
+				"hash_hint": setText("哈希表: {2:0}"),
+			},
 		},
-		Steps: []AnimStep{
-			{Description: "初始数组", Values: values, HighlightIdx: nil},
-			{Description: "i=0, v=2, 存入哈希表", Values: values, HighlightIdx: []int{0}},
-			{Description: "i=1, v=7, 查找 target-7=2", Values: values, CompareIdx: []int{0, 1}},
-			{Description: "在哈希表中找到2，返回[0,1]", Values: values, ResultIdx: []int{0, 1}},
+		{
+			Description: "i=1, v=7, 查找 target-7=2 → 命中！",
+			Delta: map[string]interface{}{
+				"cell_0": setStyle(StyleCompare),
+				"cell_1": setStyle(StyleHighlight),
+			},
+		},
+		{
+			Description: "返回 [0, 1]",
+			Delta: map[string]interface{}{
+				"cell_0": setStyle(StyleResult),
+				"cell_1": setStyle(StyleResult),
+			},
 		},
 	}
 
+	anim := UnifiedAnim{
+		Elements:  elements,
+		Frames:    frames,
+		SVGWidth:  padL*2 + float64(n)*gap,
+		SVGHeight: padT*2 + bh + 60,
+	}
 	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
 }
 
-func (c *ChatService) genTwoPointerResponse(req SendMessageRequest) (Message, AnimationData) {
-	values := []int{1, 8, 6, 2, 5, 4, 8, 3, 7}
-	code := fmt.Sprintf("```%s\nfunc maxArea(height []int) int {\n    left, right := 0, len(height)-1\n    maxArea := 0\n    for left < right {\n        h := min(height[left], height[right])\n        area := h * (right - left)\n        if area > maxArea { maxArea = area }\n        if height[left] < height[right] { left++ } else { right-- }\n    }\n    return maxArea\n}\n```", req.Language)
-
+func (c *ChatService) genTwoPointerUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	vals := []int{1, 8, 6, 2, 5, 4, 8, 3, 7}
+	code := fmt.Sprintf("```%s\nfunc maxArea(height []int) int {\n    l, r := 0, len(height)-1\n    maxA := 0\n    for l < r {\n        h := min(height[l], height[r])\n        a := h * (r - l)\n        if a > maxA { maxA = a }\n        if height[l] < height[r] { l++ } else { r-- }\n    }\n    return maxA\n}\n```", req.Language)
 	content := fmt.Sprintf(`## 题目分析
-**盛最多水的容器**，使用双指针从两端向中间收缩。
+**盛最多水的容器**，双指针从两端向中间收缩。
 
 ## 解题思路
-左右指针分别指向数组两端，每次移动较矮的一侧，计算并更新最大面积。
-- 时间复杂度：O(n)
-- 空间复杂度：O(1)
-
-## 算法步骤
-1. left=0(value=1), right=8(value=7), area=1*8=8
-2. left 矮，left++ → left=1(value=8)
-3. left=1(8), right=8(7), area=7*7=49, 更新 maxArea=49
-4. right 矮，right-- → right=7(value=3)
-5. 继续移动直到 left >= right，最终 maxArea=49
+左右指针指向两端，每次移动较矮侧，更新最大面积。
+- O(n) 时间, O(1) 空间
 
 ## 代码实现
 %s`, code)
 
-	anim := AnimationData{
-		Type: "twopointer",
-		Array: &ArrayData{
-			Values: values,
-			Labels: []string{"L", "", "", "", "", "", "", "R", ""},
-		},
-		Steps: []AnimStep{
-			{Description: "初始化 L=0, R=8", Values: values, PointerLeft: 0, PointerRight: 8, HighlightIdx: []int{0, 8}},
-			{Description: "h=min(1,7)=1, area=8", Values: values, PointerLeft: 0, PointerRight: 8, CompareIdx: []int{0, 8}},
-			{Description: "左矮，L++ → L=1", Values: values, PointerLeft: 1, PointerRight: 8, HighlightIdx: []int{1, 8}},
-			{Description: "h=min(8,7)=7, area=49", Values: values, PointerLeft: 1, PointerRight: 8, CompareIdx: []int{1, 8}},
-			{Description: "右矮，R-- → R=7", Values: values, PointerLeft: 1, PointerRight: 7, HighlightIdx: []int{1, 7}},
-			{Description: "L=1, R=7, h=min(8,3)=3, area=18", Values: values, PointerLeft: 1, PointerRight: 7, CompareIdx: []int{1, 7}},
-			{Description: "最终 maxArea=49", Values: values, ResultIdx: []int{1, 8}},
-		},
+	bw, bh, gap := 44.0, 40.0, 52.0
+	padL, padT := 30.0, 50.0
+	n := len(vals)
+
+	elements := []Element{}
+	for i, v := range vals {
+		elements = append(elements,
+			rect(fmt.Sprintf("cell_%d", i), padL+float64(i)*gap, padT, bw, bh, fmt.Sprint(v), string(StyleNormal), 6, true),
+		)
+	}
+	elements = append(elements,
+		label("ptr_l", padL, padT-18, "▲ L", string(StyleDim)),
+		label("ptr_r", padL+float64(n-1)*gap+bw/2, padT-18, "▲ R", string(StyleDim)),
+	)
+
+	frames := []Frame{
+		{Description: "初始化: L=0, R=8", Delta: map[string]interface{}{
+			"cell_0": setStyle(StyleHighlight),
+			"cell_8": setStyle(StyleHighlight),
+			"ptr_l":  setXYText(padL+bw/2, padT-18, "▲ L"),
+			"ptr_r":  setXYText(padL+float64(n-1)*gap+bw/2, padT-18, "▲ R"),
+		}},
+		{Description: "h=min(1,7)=1, area=1×8=8, L矮→L++", Delta: map[string]interface{}{
+			"cell_0": setStyle(StyleCompare),
+			"cell_8": setStyle(StyleCompare),
+		}},
+		{Description: "L=1(v=8), R=8(v=7), area=7×7=49, 更新max=49", Delta: map[string]interface{}{
+			"cell_0": setStyle(StyleDim),
+			"cell_1": setStyle(StyleHighlight),
+			"ptr_l":  setXYText(padL+1*gap+bw/2, padT-18, "▲ L"),
+		}},
+		{Description: "R矮→R=7(v=3), area=3×6=18", Delta: map[string]interface{}{
+			"cell_8": setStyle(StyleDim),
+			"cell_7": setStyle(StyleHighlight),
+			"ptr_r":  setXYText(padL+7*gap+bw/2, padT-18, "▲ R"),
+		}},
+		{Description: "L≥R 结束，maxArea=49", Delta: map[string]interface{}{
+			"cell_1": setStyle(StyleResult),
+			"cell_8": setStyle(StyleResult),
+		}},
 	}
 
-	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, UnifiedAnim{
+		Elements: elements, Frames: frames,
+		SVGWidth: padL*2 + float64(n)*gap, SVGHeight: padT*2 + bh + 40,
+	}
 }
 
-func (c *ChatService) genTreeResponse(req SendMessageRequest) (Message, AnimationData) {
-	code := fmt.Sprintf("```%s\ntype TreeNode struct {\n    Val   int\n    Left  *TreeNode\n    Right *TreeNode\n}\n\nfunc inorderTraversal(root *TreeNode) []int {\n    var result []int\n    var dfs func(*TreeNode)\n    dfs = func(node *TreeNode) {\n        if node == nil { return }\n        dfs(node.Left)\n        result = append(result, node.Val)\n        dfs(node.Right)\n    }\n    dfs(root)\n    return result\n}\n```", req.Language)
-
+func (c *ChatService) genLinkedListUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	code := fmt.Sprintf("```%s\ntype ListNode struct { Val int; Next *ListNode }\nfunc reverseList(head *ListNode) *ListNode {\n    var prev *ListNode\n    curr := head\n    for curr != nil {\n        next := curr.Next\n        curr.Next = prev\n        prev = curr\n        curr = next\n    }\n    return prev\n}\n```", req.Language)
 	content := fmt.Sprintf(`## 题目分析
-**二叉树的中序遍历**，按照 左→根→右 的顺序遍历所有节点。
-
-## 解题思路
-使用递归 DFS，先递归左子树，再访问根节点，最后递归右子树。
-- 时间复杂度：O(n)
-- 空间复杂度：O(h)，h 为树高
+**反转链表**，迭代翻转每个节点的 Next 指针。
 
 ## 算法步骤
-1. 从根节点1开始，递归进入左子树
-2. 访问节点2，递归进入左子树
-3. 访问节点4，无左子树，输出 4
-4. 回溯到2，输出 2
-5. 进入2的右子树，访问节点5，输出 5
-6. 回溯到1，输出 1
-7. 进入1的右子树，访问节点3，输出 3
-8. 遍历完成：中序结果 [4, 2, 5, 1, 3]
+1. prev=nil, curr=1
+2. 保存 next=2, curr.Next=nil, prev=1, curr=2
+3. 继续直到 curr=nil, 返回 prev=4
 
 ## 代码实现
 %s`, code)
 
-	nodes := []TreeNodeData{
-		{ID: "1", Value: "1", Left: "2", Right: "3", X: 300, Y: 40},
-		{ID: "2", Value: "2", Left: "4", Right: "5", X: 180, Y: 140},
-		{ID: "3", Value: "3", Left: "", Right: "", X: 420, Y: 140},
-		{ID: "4", Value: "4", Left: "", Right: "", X: 100, Y: 240},
-		{ID: "5", Value: "5", Left: "", Right: "", X: 260, Y: 240},
+	nodeW, nodeH := 52.0, 38.0
+	gap := 70.0
+	padL, padT := 30.0, 50.0
+	vals := []string{"1", "2", "3", "4"}
+
+	elements := []Element{}
+	for i, v := range vals {
+		x := padL + float64(i)*gap
+		// Main node rect
+		elements = append(elements, rect(fmt.Sprintf("n%d", i), x, padT, nodeW, nodeH, v, string(StyleNormal), 6, true))
+		// Next-divider line (visual)
+		elements = append(elements, line(fmt.Sprintf("div_%d", i), x+nodeW*0.65, padT, x+nodeW*0.65, padT+nodeH, "#4b5563", false))
+		// Arrow between nodes
+		if i < len(vals)-1 {
+			elements = append(elements, line(fmt.Sprintf("edge_%d", i), x+nodeW, padT+nodeH/2, x+gap, padT+nodeH/2, "#4b5563", true))
+		}
+	}
+	elements = append(elements,
+		label("head_label", padL+nodeW/2, padT-16, "head", string(StyleDim)),
+		label("null_label", padL+float64(len(vals)-1)*gap+nodeW/2, padT+nodeH+22, "null", string(StyleDim)),
+	)
+
+	frames := []Frame{
+		{Description: "初始: 1→2→3→4→null", Delta: map[string]interface{}{"n0": setStyle(StyleHighlight)}},
+		{Description: "prev=nil, curr=1, next=2", Delta: map[string]interface{}{
+			"n0": setStyle(StyleHighlight),
+			"n1": setStyle(StyleHighlight),
+		}},
+		{Description: "1.Next=nil, prev=1, curr=2", Delta: map[string]interface{}{
+			"n0":       setStyle(StyleResult),
+			"n1":       setStyle(StyleHighlight),
+			"edge_0":   setStyle(StyleDim),
+			"n2":       setStyle(StyleHighlight),
+		}},
+		{Description: "2.Next=1, prev=2, curr=3", Delta: map[string]interface{}{
+			"n1": setStyle(StyleResult), "n2": setStyle(StyleHighlight), "n3": setStyle(StyleHighlight),
+		}},
+		{Description: "3.Next=2, prev=3, curr=4", Delta: map[string]interface{}{
+			"n2": setStyle(StyleResult), "n3": setStyle(StyleHighlight),
+		}},
+		{Description: "4.Next=3, prev=4, curr=nil → 完成!", Delta: map[string]interface{}{
+			"n3": setStyle(StyleResult),
+		}},
 	}
 
-	anim := AnimationData{
-		Type: "tree",
-		Tree: &TreeData{Nodes: nodes, Root: "1"},
-		Steps: []AnimStep{
-			{Description: "从根节点 1 开始", NodeID: "1", NodePath: []string{"1"}},
-			{Description: "递归进入左子树，访问节点 2", NodeID: "2", NodePath: []string{"1", "2"}},
-			{Description: "递归进入左子树，访问节点 4", NodeID: "4", NodePath: []string{"1", "2", "4"}},
-			{Description: "节点 4 无左子树，输出 4", NodeID: "4", NodePath: []string{"1", "2", "4"}},
-			{Description: "回溯到节点 2，输出 2", NodeID: "2", NodePath: []string{"1", "2"}},
-			{Description: "进入节点 5，输出 5", NodeID: "5", NodePath: []string{"1", "2", "5"}},
-			{Description: "回溯到根节点 1，输出 1", NodeID: "1", NodePath: []string{"1"}},
-			{Description: "进入右子树，访问节点 3，输出 3", NodeID: "3", NodePath: []string{"1", "3"}},
-		},
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, UnifiedAnim{
+		Elements: elements, Frames: frames,
+		SVGWidth: padL*2 + float64(len(vals))*gap, SVGHeight: padT*2 + nodeH + 60,
 	}
-
-	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
 }
 
-func (c *ChatService) genDpResponse(req SendMessageRequest) (Message, AnimationData) {
-	code := fmt.Sprintf("```%s\nfunc knapsack(weights []int, values []int, capacity int) int {\n    n := len(weights)\n    dp := make([][]int, n+1)\n    for i := range dp {\n        dp[i] = make([]int, capacity+1)\n    }\n    for i := 1; i <= n; i++ {\n        for j := 0; j <= capacity; j++ {\n            if weights[i-1] > j {\n                dp[i][j] = dp[i-1][j]\n            } else {\n                dp[i][j] = max(dp[i-1][j], dp[i-1][j-weights[i-1]]+values[i-1])\n            }\n        }\n    }\n    return dp[n][capacity]\n}\n```", req.Language)
-
+func (c *ChatService) genSlidingWindowUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	vals := []int{2, 3, 1, 2, 4, 3, 5}
+	code := fmt.Sprintf("```%s\nfunc minSubArrayLen(target int, nums []int) int {\n    l, sum, minL := 0, 0, math.MaxInt32\n    for r := 0; r < len(nums); r++ {\n        sum += nums[r]\n        for sum >= target {\n            if r-l+1 < minL { minL = r-l+1 }\n            sum -= nums[l]; l++\n        }\n    }\n    return minL\n}\n```", req.Language)
 	content := fmt.Sprintf(`## 题目分析
-**0/1 背包问题**，经典动态规划，选择物品使总价值最大且不超过容量。
+**长度最小子数组**，滑动窗口找和≥target的最短连续子数组。
 
 ## 解题思路
-dp[i][j] 表示前 i 个物品放入容量 j 的最大价值。
-状态转移：dp[i][j] = max(dp[i-1][j], dp[i-1][j-w[i-1]] + v[i-1])
-- 时间复杂度：O(n * capacity)
-- 空间复杂度：O(n * capacity)
+右指针扩展窗口，和≥target时收缩左指针求最小长度。
 
 ## 代码实现
 %s`, code)
 
-	// weights=[2,3,4], values=[3,4,5], capacity=5
+	bw, bh, gap := 44.0, 40.0, 52.0
+	padL, padT := 30.0, 55.0
+	n := len(vals)
+
+	elements := []Element{}
+	for i, v := range vals {
+		elements = append(elements,
+			rect(fmt.Sprintf("c%d", i), padL+float64(i)*gap, padT, bw, bh, fmt.Sprint(v), string(StyleNormal), 6, true),
+		)
+	}
+	elements = append(elements,
+		line("win_l", 0, padT-8, 0, padT+8, "transparent", false),
+		line("win_r", 0, padT-8, 0, padT+8, "transparent", false),
+		line("win_top", 0, padT-6, 0, padT-6, "transparent", false),
+		label("win_label", 0, 0, "", string(StyleDim)),
+	)
+
+	rx := func(idx float64) float64 { return padL + idx*gap }
+
+		frames := []Frame{
+		{Description: "初始状态", Delta: map[string]interface{}{}},
+		{Description: "R=0, sum=2 < 7", Delta: map[string]interface{}{
+			"c0": setStyle(StyleHighlight),
+			"win_l":  setLine(rx(0), padT-8, rx(0), padT+8),
+			"win_r":  setLine(rx(0)+bw, padT-8, rx(0)+bw, padT+8),
+			"win_top": setLine(rx(0), padT-6, rx(0)+bw, padT-6),
+		}},
+		{Description: "R=3, sum=8≥7, minLen=4", Delta: map[string]interface{}{
+			"c0": setStyle(StyleCompare), "c1": setStyle(StyleCompare),
+			"c2": setStyle(StyleCompare), "c3": setStyle(StyleCompare),
+			"win_r":  setLine(rx(3)+bw, padT-8, rx(3)+bw, padT+8),
+			"win_top": setLine(rx(0), padT-6, rx(3)+bw, padT-6),
+			"win_label": setXYText((rx(0)+rx(3)+bw)/2, padT-16, "len=4"),
+		}},
+		{Description: "收缩 L=1, sum=6<7, 继续扩展R=4, sum=10≥7", Delta: map[string]interface{}{
+			"c0": setStyle(StyleDim), "c1": setStyle(StyleHighlight), "c4": setStyle(StyleCompare),
+			"win_l": setLine(rx(1), padT-8, rx(1), padT+8),
+			"win_top": setLine(rx(1), padT-6, rx(4)+bw, padT-6),
+		}},
+		{Description: "最终 minLen=2 (子数组[4,3])", Delta: map[string]interface{}{
+			"c4": setStyle(StyleResult), "c5": setStyle(StyleResult),
+			"win_l": setLine(rx(4), padT-8, rx(4), padT+8),
+			"win_r": setLine(rx(5)+bw, padT-8, rx(5)+bw, padT+8),
+			"win_top": setLine(rx(4), padT-6, rx(5)+bw, padT-6),
+			"win_label": setXYText((rx(4)+rx(5)+bw)/2, padT-16, "minLen=2"),
+		}},
+	}
+
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, UnifiedAnim{
+		Elements: elements, Frames: frames,
+		SVGWidth: padL*2 + float64(n)*gap, SVGHeight: padT*2 + bh + 40,
+	}
+}
+
+func (c *ChatService) genSortingUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	vals := []int{5, 3, 8, 4, 2, 7, 1, 6}
+	code := fmt.Sprintf("```%s\nfunc partition(nums []int, lo, hi int) int {\n    pivot := nums[hi]\n    i := lo\n    for j := lo; j < hi; j++ {\n        if nums[j] < pivot {\n            nums[i], nums[j] = nums[j], nums[i]\n            i++\n        }\n    }\n    nums[i], nums[hi] = nums[hi], nums[i]\n    return i\n}\n```", req.Language)
+	content := fmt.Sprintf(`## 题目分析
+**快速排序 Partition**，以最后一个元素为 pivot 划分数组。
+
+## 算法步骤
+小于 pivot 的元素交换到左边，大于的在右边。
+
+## 代码实现
+%s`, code)
+
+	bw, bh, gap := 44.0, 40.0, 52.0
+	padL, padT := 30.0, 55.0
+	n := len(vals)
+	pivotIdx := n - 1
+
+	elements := []Element{}
+	for i, v := range vals {
+		elements = append(elements,
+			rect(fmt.Sprintf("c%d", i), padL+float64(i)*gap, padT, bw, bh, fmt.Sprint(v), string(StyleNormal), 6, true),
+		)
+	}
+	elements = append(elements,
+		label("pivot_area", padL+float64(pivotIdx)*gap+bw/2, padT-24, "▲ pivot", string(StyleDim)),
+	)
+
+	t := func(idx int) float64 { return padL + float64(idx)*gap + bw/2 }
+
+	frames := []Frame{
+		{Description: "初始数组, pivot=6(idx=7)", Delta: map[string]interface{}{
+			"c7": setStyle(StylePivot),
+			"pivot_area": setXYText(t(7), padT-24, "▲ pivot=6"),
+		}},
+		{Description: "5<6 ✓ swap(i=0,j=0)", Delta: map[string]interface{}{
+			"c0": setStyle(StyleCompare),
+		}},
+		{Description: "3<6 ✓ swap(i=1,j=1)", Delta: map[string]interface{}{
+			"c0": setStyle(StyleResult), "c1": setStyle(StyleCompare),
+		}},
+		{Description: "8>6 ✗ 跳过", Delta: map[string]interface{}{
+			"c1": setStyle(StyleResult), "c2": setStyle(StyleSwap),
+		}},
+		{Description: "4<6 ✓ swap(i=2,j=3) → [5,3,4,8,...]", Delta: map[string]interface{}{
+			"c2": setStyle(StyleResult), "c3": setStyle(StyleHighlight),
+		}},
+		{Description: "2<6 ✓ swap(i=3,j=4) → [5,3,4,2,...]", Delta: map[string]interface{}{
+			"c3": setStyle(StyleResult), "c4": setStyle(StyleHighlight),
+		}},
+		{Description: "7>6 ✗ 跳过", Delta: map[string]interface{}{
+			"c4": setStyle(StyleResult), "c5": setStyle(StyleSwap),
+		}},
+		{Description: "1<6 ✓ swap(i=4,j=6)", Delta: map[string]interface{}{
+			"c5": setStyle(StyleResult), "c6": setStyle(StyleHighlight),
+		}},
+		{Description: "pivot 归位, swap(i=5,pivot) → [5,3,4,2,1,6,8,7]", Delta: map[string]interface{}{
+			"c5": setStyle(StyleResult), "c6": setStyle(StyleDim),
+			"c7":       setStyle(StyleResult),
+			"pivot_area": setXYText(t(5), padT-24, ""),
+		}},
+	}
+
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, UnifiedAnim{
+		Elements: elements, Frames: frames,
+		SVGWidth: padL*2 + float64(n)*gap, SVGHeight: padT*2 + bh + 40,
+	}
+}
+
+func (c *ChatService) genTreeUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	code := fmt.Sprintf("```%s\ntype TreeNode struct { Val int; Left, Right *TreeNode }\nfunc inorder(root *TreeNode) []int {\n    if root == nil { return nil }\n    res := inorder(root.Left)\n    res = append(res, root.Val)\n    res = append(res, inorder(root.Right)...)\n    return res\n}\n```", req.Language)
+	content := fmt.Sprintf(`## 题目分析
+**二叉树中序遍历**: 左→根→右，递归访问所有节点。
+
+## 算法步骤
+结果: [4, 2, 5, 1, 3]
+
+## 代码实现
+%s`, code)
+
+	// Node positions (centered tree layout)
+	//         1(300,40)
+	//       /      \
+	//   2(170,150)  3(430,150)
+	//   /   \
+	// 4(80,260) 5(260,260)
+
+	nodes := []struct{ id, val string; cx, cy float64 }{ {"1","1",300,50}, {"2","2",170,160}, {"3","3",430,160}, {"4","4",80,270}, {"5","5",260,270} }
+	edges := []struct{ from, to string }{ {"1","2"}, {"1","3"}, {"2","4"}, {"2","5"} }
+
+	elements := []Element{}
+	for _, n := range nodes {
+		elements = append(elements, circle(fmt.Sprintf("n_%s", n.id), n.cx, n.cy, 22, n.val, string(StyleNormal), true))
+	}
+	for i, e := range edges {
+		fn := nodeByID(nodes, e.from)
+		tn := nodeByID(nodes, e.to)
+		elements = append(elements, line(fmt.Sprintf("edge_%d", i), fn.cx, fn.cy+22, tn.cx, tn.cy-22, "#4b5563", false))
+	}
+	elements = append(elements,
+		label("path_label", 320, 330, "", string(StyleDim)),
+	)
+
+	frames := []Frame{
+		{Description: "从根节点 1 开始", Delta: map[string]interface{}{"n_1": setStyle(StyleHighlight)}},
+		{Description: "递归左子树 → 节点 2", Delta: map[string]interface{}{
+			"n_1": setStyle(StyleDim), "n_2": setStyle(StyleHighlight), "edge_0": setColor("#3b82f6"),
+		}},
+		{Description: "递归左子树 → 节点 4", Delta: map[string]interface{}{
+			"n_2": setStyle(StyleDim), "n_4": setStyle(StyleHighlight), "edge_2": setColor("#3b82f6"),
+		}},
+		{Description: "节点4无左子，输出 4", Delta: map[string]interface{}{
+			"n_4": setStyle(StyleResult), "path_label": setText("输出: [4]"),
+		}},
+		{Description: "回溯2，输出 2", Delta: map[string]interface{}{
+			"n_2": setStyle(StyleResult), "path_label": setText("输出: [4, 2]"),
+		}},
+		{Description: "进入节点5，输出 5", Delta: map[string]interface{}{
+			"n_5": setStyle(StyleResult), "edge_3": setStyle("#3b82f6"), "path_label": setText("输出: [4, 2, 5]"),
+		}},
+		{Description: "回溯根节点1，输出 1", Delta: map[string]interface{}{
+			"n_1": setStyle(StyleResult), "path_label": setText("输出: [4, 2, 5, 1]"),
+		}},
+		{Description: "进入右子树3，输出 3 → 完成 [4,2,5,1,3]", Delta: map[string]interface{}{
+			"n_3": setStyle(StyleResult), "edge_1": setStyle("#3b82f6"), "path_label": setText("输出: [4, 2, 5, 1, 3]"),
+		}},
+	}
+
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, UnifiedAnim{
+		Elements: elements, Frames: frames, SVGWidth: 560, SVGHeight: 380,
+	}
+}
+
+func (c *ChatService) genDpUnified(req SendMessageRequest) (Message, UnifiedAnim) {
+	code := fmt.Sprintf("```%s\nfunc knapsack(w []int, v []int, cap int) int {\n    n := len(w)\n    dp := make([][]int, n+1)\n    for i := range dp { dp[i] = make([]int, cap+1) }\n    for i := 1; i <= n; i++ {\n        for j := 0; j <= cap; j++ {\n            if w[i-1] > j { dp[i][j] = dp[i-1][j] }else{ dp[i][j] = max(dp[i-1][j], dp[i-1][j-w[i-1]]+v[i-1]) }\n        }\n    }\n    return dp[n][cap]\n}\n```", req.Language)
+	content := fmt.Sprintf(`## 题目分析
+**0/1 背包** — 经典DP，dp[i][j]=前i个物品容量j的最大价值。
+
+## 算法步骤
+w=[2,3,4], v=[3,4,5], cap=5
+
+## 代码实现
+%s`, code)
+
+	// Build DP table: 4 rows x 6 cols
 	grid := [][]string{
 		{"0", "0", "0", "0", "0", "0"},
 		{"0", "0", "3", "3", "3", "3"},
 		{"0", "0", "3", "4", "4", "7"},
 		{"0", "0", "3", "4", "5", "7"},
 	}
+	rowH := []string{"空", "物品1(2kg/3)", "物品2(3kg/4)", "物品3(4kg/5)"}
+	colH := []string{"0", "1", "2", "3", "4", "5"}
 
-	anim := AnimationData{
-		Type: "dptable",
-		Table: &DpTableData{
-			Rows:       4,
-			Cols:       6,
-			RowHeaders: []string{"0", "物品1(2kg/3¥)", "物品2(3kg/4¥)", "物品3(4kg/5¥)"},
-			ColHeaders: []string{"0", "1", "2", "3", "4", "5"},
-		},
-		Steps: []AnimStep{
-			{Description: "初始化 dp 表，dp[0][*] = 0", TableGrid: grid, Row: 0, Col: -1},
-			{Description: "i=1, j=2: w[0]=2≤2, dp=3", TableGrid: grid, Row: 1, Col: 2, CellValue: "3"},
-			{Description: "i=1: 容量<2 时不可选，dp=0", TableGrid: grid, Row: 1, Col: 1},
-			{Description: "i=2, j=3: max(dp[1][3]=3, dp[1][0]+4=4)=4", TableGrid: grid, Row: 2, Col: 3, CellValue: "4"},
-			{Description: "i=2, j=5: max(dp[1][5]=3, dp[1][2]+4=7)=7", TableGrid: grid, Row: 2, Col: 5, CellValue: "7"},
-			{Description: "i=3, j=4: max(dp[2][4]=4, dp[2][0]+5=5)=5", TableGrid: grid, Row: 3, Col: 4, CellValue: "5"},
-			{Description: "最终答案 dp[3][5] = 7", TableGrid: grid, Row: 3, Col: 5, CellValue: "7"},
-		},
+	cw, ch := 44.0, 34.0
+	hw := 100.0
+	pad := 10.0
+
+	elements := []Element{}
+	// Col headers
+	for ci, h := range colH {
+		elements = append(elements, rect(fmt.Sprintf("ch_%d", ci), hw+float64(ci)*cw, pad, cw, ch, h, string(StyleNormal), 0, true))
+	}
+	// Row headers + cells
+	for ri, row := range grid {
+		elements = append(elements, rect(fmt.Sprintf("rh_%d", ri), pad, ch+pad+float64(ri)*ch, hw-pad, ch, rowH[ri], string(StyleNormal), 0, true))
+		for ci, val := range row {
+			elements = append(elements, rect(fmt.Sprintf("cell_%d_%d", ri, ci), hw+float64(ci)*cw, ch+pad+float64(ri)*ch, cw, ch, val, string(StyleNormal), 0, true))
+		}
 	}
 
-	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
-}
-
-func (c *ChatService) genLinkedListResponse(req SendMessageRequest) (Message, AnimationData) {
-	code := fmt.Sprintf("```%s\ntype ListNode struct {\n    Val  int\n    Next *ListNode\n}\n\nfunc reverseList(head *ListNode) *ListNode {\n    var prev *ListNode\n    curr := head\n    for curr != nil {\n        next := curr.Next\n        curr.Next = prev\n        prev = curr\n        curr = next\n    }\n    return prev\n}\n```", req.Language)
-
-	content := fmt.Sprintf(`## 题目分析
-**反转链表**，使用迭代法逐个翻转节点指针。
-
-## 解题思路
-用三个指针 prev/curr/next 遍历链表，每次将 curr.Next 指向 prev。
-- 时间复杂度：O(n)
-- 空间复杂度：O(1)
-
-## 算法步骤
-1. prev=nil, curr=1，准备反转
-2. next=2，curr.Next=prev(nil)，prev=1，curr=2
-3. next=3，curr.Next=prev(1)，prev=2，curr=3
-4. next=4，curr.Next=prev(2)，prev=3，curr=4
-5. curr=nil，反转完成，返回 prev=4
-
-## 代码实现
-%s`, code)
-
-	nodes := []ListNodeData{
-		{ID: "1", Value: "1", Next: "2", X: 30, Y: 50},
-		{ID: "2", Value: "2", Next: "3", X: 160, Y: 50},
-		{ID: "3", Value: "3", Next: "4", X: 290, Y: 50},
-		{ID: "4", Value: "4", Next: "", X: 420, Y: 50},
+	frames := []Frame{
+		{Description: "初始化 dp[0][*]=0", Delta: map[string]interface{}{}},
+		{Description: "i=1, j=2: w[0]=2≤2, dp[1][2]=3", Delta: map[string]interface{}{
+			"cell_1_2": setStyle(StyleHighlight),
+		}},
+		{Description: "i=2, j=3: max(3, dp[1][0]+4)=4", Delta: map[string]interface{}{
+			"cell_1_2": setStyle(StyleResult),
+			"cell_2_3": setStyle(StyleHighlight),
+		}},
+		{Description: "i=2, j=5: max(3, dp[1][2]+4=7)=7", Delta: map[string]interface{}{
+			"cell_2_3": setStyle(StyleResult),
+			"cell_2_5": setStyle(StyleHighlight),
+		}},
+		{Description: "i=3, j=4: max(4, dp[2][0]+5=5)=5", Delta: map[string]interface{}{
+			"cell_2_5": setStyle(StyleResult),
+			"cell_3_4": setStyle(StyleHighlight),
+		}},
+		{Description: "最终答案 dp[3][5]=7", Delta: map[string]interface{}{
+			"cell_3_4": setStyle(StyleDim),
+			"cell_3_5": setStyle(StyleResult),
+		}},
 	}
 
-	anim := AnimationData{
-		Type: "linkedlist",
-		List: &LinkedListData{Nodes: nodes, Head: "1"},
-		Steps: []AnimStep{
-			{Description: "初始链表: 1→2→3→4→null", ListNodes: nodes, NodeID: "1", HighlightIdx: []int{0}},
-			{Description: "prev=nil, curr=1, next=2", ListNodes: nodes, NodeID: "1", HighlightIdx: []int{0, 1}},
-			{Description: "curr.Next=prev(nil), prev=1, curr=2", ListNodes: nodes, NodeID: "2", HighlightIdx: []int{1, 2}},
-			{Description: "curr.Next=prev(1), prev=2, curr=3", ListNodes: nodes, NodeID: "3", HighlightIdx: []int{2, 3}},
-			{Description: "curr.Next=prev(2), prev=3, curr=4", ListNodes: nodes, NodeID: "4", HighlightIdx: []int{3}},
-			{Description: "curr=nil, 反转完成, head=prev=4", ListNodes: nodes, ResultIdx: []int{3}},
-		},
+	rows, cols := float64(len(grid)), float64(len(colH))
+	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, UnifiedAnim{
+		Elements: elements, Frames: frames,
+		SVGWidth: hw + cols*cw + pad, SVGHeight: ch + pad + rows*ch + pad,
 	}
-
-	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
-}
-
-func (c *ChatService) genSlidingWindowResponse(req SendMessageRequest) (Message, AnimationData) {
-	values := []int{2, 3, 1, 2, 4, 3, 5}
-	code := fmt.Sprintf("```%s\nfunc minSubArrayLen(target int, nums []int) int {\n    left := 0\n    sum := 0\n    minLen := math.MaxInt32\n    for right := 0; right < len(nums); right++ {\n        sum += nums[right]\n        for sum >= target {\n            minLen = min(minLen, right-left+1)\n            sum -= nums[left]\n            left++\n        }\n    }\n    return minLen\n}\n```", req.Language)
-
-	content := fmt.Sprintf(`## 题目分析
-**长度最小的子数组**，使用滑动窗口找到和 ≥ target 的最短连续子数组。
-
-## 解题思路
-右指针扩展窗口直到 sum ≥ target，然后左指针收缩窗口求最小长度。
-- 时间复杂度：O(n)
-- 空间复杂度：O(1)
-
-## 算法步骤
-1. R=0, sum=2 < 7，继续扩展
-2. R=1, sum=5 < 7，继续扩展
-3. R=2, sum=6 < 7，继续扩展
-4. R=3, sum=8 ≥ 7，记录 len=4，收缩 L
-5. L=1, sum=6 < 7，继续扩展 R
-6. R=4, sum=10 ≥ 7，记录 len=4，收缩 L
-7. L=2, sum=7 ≥ 7，记录 len=3，收缩 → 最终 minLen=2
-
-## 代码实现
-%s`, code)
-
-	anim := AnimationData{
-		Type: "slidingwindow",
-		Array: &ArrayData{Values: values},
-		Steps: []AnimStep{
-			{Description: "初始状态：左边界=0", Values: values, WindowStart: 0, WindowEnd: -1},
-			{Description: "R=0, sum=2 < 7", Values: values, WindowStart: 0, WindowEnd: 0, HighlightIdx: []int{0}},
-			{Description: "R=1, sum=5 < 7", Values: values, WindowStart: 0, WindowEnd: 1, HighlightIdx: []int{0, 1}},
-			{Description: "R=2, sum=6 < 7", Values: values, WindowStart: 0, WindowEnd: 2, HighlightIdx: []int{0, 1, 2}},
-			{Description: "R=3, sum=8 ≥ 7, minLen=4", Values: values, WindowStart: 0, WindowEnd: 3, CompareIdx: []int{0, 1, 2, 3}},
-			{Description: "收缩 L=1, sum=sum-2=6", Values: values, WindowStart: 1, WindowEnd: 3, HighlightIdx: []int{1, 2, 3}},
-			{Description: "R=4, sum=10 ≥ 7, minLen=4", Values: values, WindowStart: 1, WindowEnd: 4, CompareIdx: []int{1, 2, 3, 4}},
-			{Description: "收缩 L=2, sum=8 → len=3", Values: values, WindowStart: 2, WindowEnd: 4, CompareIdx: []int{2, 3, 4}},
-			{Description: "最终 minLen=2 (子数组[4,3])", Values: values, ResultIdx: []int{4, 5}},
-		},
-	}
-
-	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
-}
-
-func (c *ChatService) genSortingResponse(req SendMessageRequest) (Message, AnimationData) {
-	values := []int{5, 3, 8, 4, 2, 7, 1, 6}
-	code := fmt.Sprintf("```%s\nfunc quickSort(nums []int, low, high int) {\n    if low >= high { return }\n    pivot := partition(nums, low, high)\n    quickSort(nums, low, pivot-1)\n    quickSort(nums, pivot+1, high)\n}\n\nfunc partition(nums []int, low, high int) int {\n    pivot := nums[high]\n    i := low\n    for j := low; j < high; j++ {\n        if nums[j] < pivot {\n            nums[i], nums[j] = nums[j], nums[i]\n            i++\n        }\n    }\n    nums[i], nums[high] = nums[high], nums[i]\n    return i\n}\n```", req.Language)
-
-	content := fmt.Sprintf(`## 题目分析
-**快速排序**，基于分治思想，选取 pivot 将数组划分为两个子数组递归排序。
-
-## 解题思路
-选取最后一个元素为 pivot，将小于 pivot 的元素交换到左侧，大于的留在右侧。
-- 平均时间复杂度：O(n log n)
-- 空间复杂度：O(log n)
-
-## 代码实现
-%s`, code)
-
-	anim := AnimationData{
-		Type: "sorting",
-		Array: &ArrayData{Values: values},
-		Steps: []AnimStep{
-			{Description: "初始数组", Values: values},
-			{Description: "pivot=6, 比较 nums[0]=5 < 6, swap nums[0]↔nums[0]", Values: values, PivotIdx: 7, HighlightIdx: []int{0}},
-			{Description: "pivot=6, 比较 nums[1]=3 < 6, swap nums[1]↔nums[1]", Values: values, PivotIdx: 7, HighlightIdx: []int{1}},
-			{Description: "pivot=6, 比较 nums[2]=8 > 6, 不交换", Values: values, PivotIdx: 7, CompareIdx: []int{2}},
-			{Description: "pivot=6, 比较 nums[3]=4 < 6, swap nums[3]↔nums[2] → [5,3,4,8,2,7,1,6]", Values: []int{5, 3, 4, 8, 2, 7, 1, 6}, PivotIdx: 7, SwapIdx: []int{2, 3}},
-			{Description: "pivot=6, 比较 nums[4]=2 < 6, swap → [5,3,4,2,8,7,1,6]", Values: []int{5, 3, 4, 2, 8, 7, 1, 6}, PivotIdx: 7, SwapIdx: []int{3, 4}},
-			{Description: "pivot=6, 比较 nums[5]=7 > 6, 不交换", Values: []int{5, 3, 4, 2, 8, 7, 1, 6}, PivotIdx: 7, CompareIdx: []int{5}},
-			{Description: "pivot=6, 比较 nums[6]=1 < 6, swap → [5,3,4,2,1,7,8,6]", Values: []int{5, 3, 4, 2, 1, 7, 8, 6}, PivotIdx: 7, SwapIdx: []int{5, 6}},
-			{Description: "pivot归位, swap nums[6]↔pivot → [5,3,4,2,1,6,8,7]", Values: []int{5, 3, 4, 2, 1, 6, 8, 7}, ResultIdx: []int{5}},
-		},
-	}
-
-	return Message{Role: RoleAssistant, Content: content, Time: time.Now()}, anim
 }
 
 // ---- Helpers ----
+
+func nodeByID(nodes []struct{ id, val string; cx, cy float64 }, id string) struct{ id, val string; cx, cy float64 } {
+	for _, n := range nodes {
+		if n.id == id {
+			return n
+		}
+	}
+	return nodes[0]
+}
 
 func estimateTokens(text string) int {
 	return len([]rune(text)) * 2 / 3
