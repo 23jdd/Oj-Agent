@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=OJ Agent
+Comment=输入算法题目，自动生成题解动画
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/oj-agent.exe %u
+Terminal=false
+Type=Application
+Icon=oj-agent.exe
+Categories=Utility;
+StartupWMClass=oj-agent.exe
+
+ 

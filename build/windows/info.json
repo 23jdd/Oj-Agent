@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "Oj-Agent Team",
+			"FileDescription": "输入算法题目，自动生成题解动画",
+			"LegalCopyright": "© 2026, My Company",
+			"ProductName": "OJ Agent",
+			"Comments": "This is a comment"
+		}
+	}
+}
