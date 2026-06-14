@@ -1,5 +1,7 @@
 <script setup>
-import { ref, nextTick, watch, inject } from 'vue'
+import { ref, nextTick, watch, inject, onUpdated } from 'vue'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 import { NewSession, SendMessage } from '../../bindings/Oj-Agent/chatservice'
 import { SendMessageRequest } from '../../bindings/Oj-Agent/models'
 
@@ -31,7 +33,21 @@ const scrollToBottom = () => {
   })
 }
 
-watch(() => props.messages?.length, scrollToBottom)
+const handleHighlight = () => {
+  nextTick(() => {
+    if (!chatContainer.value) return
+    const blocks = chatContainer.value.querySelectorAll('pre.code-block code')
+    blocks.forEach((block) => {
+      hljs.highlightElement(block)
+    })
+  })
+}
+
+onUpdated(handleHighlight)
+watch(() => props.messages?.length, () => {
+  scrollToBottom()
+  handleHighlight()
+})
 
 const sendMessage = async () => {
   const text = inputText.value.trim()
@@ -118,7 +134,7 @@ const renderContent = (content) => {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>')
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code class="language-$1">$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
