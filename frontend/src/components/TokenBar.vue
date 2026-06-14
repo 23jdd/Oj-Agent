@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { inject } from 'vue'
 
 const props = defineProps({ usage: Object })
+const llmStatus = inject('llmStatus', null)
 
 const formatTokens = (val) => {
   if (!val || val === 0) return '0'
@@ -14,8 +15,8 @@ const formatTokens = (val) => {
 <template>
   <div class="token-bar">
     <div class="token-item">
-      <span class="dot online"></span>
-      <span class="token-label">GPT-4o</span>
+      <span :class="['dot', llmStatus === 'connected' ? 'online' : 'offline']"></span>
+      <span class="token-label">{{ llmStatus === 'connected' ? 'LLM 在线' : '模拟模式' }}</span>
     </div>
     <div class="divider"></div>
     <div class="token-item">
@@ -52,5 +53,6 @@ const formatTokens = (val) => {
 .version { color: var(--text-muted); font-size: 10px; opacity: 0.5; letter-spacing: 0.5px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .dot.online { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.5); animation: dotPulse 2s ease-in-out infinite; }
+.dot.offline { background: #6b7280; }
 @keyframes dotPulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
 </style>

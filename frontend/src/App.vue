@@ -3,19 +3,34 @@ import Sidebar from './components/Sidebar.vue'
 import ChatArea from './components/ChatArea.vue'
 import AnimationPanel from './components/AnimationPanel.vue'
 import TokenBar from './components/TokenBar.vue'
-import { ref, provide } from 'vue'
+import SettingsModal from './components/SettingsModal.vue'
+import { ref, provide, onMounted } from 'vue'
+import { GetLLMStatus } from '../bindings/Oj-Agent/chatservice'
 
 const activeSessionId = ref('')
 const sessions = ref([])
 const tokenUsage = ref({ sessionTokens: 0, totalTokens: 0 })
 const messages = ref([])
 const animationData = ref(null)
+const showSettings = ref(false)
+const selectedModel = ref('deepseek-chat')
+const llmStatus = ref('checking')
 
 provide('activeSessionId', activeSessionId)
 provide('sessions', sessions)
 provide('tokenUsage', tokenUsage)
 provide('messages', messages)
 provide('animationData', animationData)
+provide('selectedModel', selectedModel)
+provide('llmStatus', llmStatus)
+
+onMounted(async () => {
+  try {
+    llmStatus.value = await GetLLMStatus()
+  } catch (e) {
+    llmStatus.value = 'mock'
+  }
+})
 </script>
 
 <template>
@@ -27,10 +42,19 @@ provide('animationData', animationData)
         @select="activeSessionId = $event"
         @new="activeSessionId = ''; messages = []; animationData = null"
       />
-      <ChatArea :messages="messages" :sessionId="activeSessionId" />
+      <ChatArea
+        :messages="messages"
+        :sessionId="activeSessionId"
+        @open-settings="showSettings = true"
+      />
       <AnimationPanel :animationData="animationData" />
       <TokenBar :usage="tokenUsage" />
     </div>
+    <SettingsModal
+      v-if="showSettings"
+      @close="showSettings = false"
+      @updated="showSettings = false"
+    />
   </div>
 </template>
 

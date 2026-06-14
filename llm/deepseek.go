@@ -15,33 +15,115 @@ import (
 
 var systemPrompt = `你是一个算法题解动画生成助手。根据用户输入的算法题目，生成详细的题解和动画步骤。
 
-## 输出规则
-1. **题目分析**：题目类型、数据结构、难度
-2. **解题思路**：核心思路 + 时间/空间复杂度
-3. **算法步骤**：拆分为5-10个关键步骤
-4. **代码实现**：完整可运行代码（用 {language} 语言）
+## 输出格式
 
-## 动画颜色
-- blue = 当前关注元素  |  yellow = 比较中  |  red = 交换中
-- green = 结果/已完成  |  purple = pivot/基线
+你必须严格按以下两部分输出，用 "---ANIM---" 分隔：
 
-## 输出格式（Markdown）
+### 第一部分：Markdown 题解
+使用标准 Markdown，结构如下：
+
 ## 题目分析
-（分析内容）
+（题目类型、数据结构、难度）
 
 ## 解题思路
 - 时间复杂度：O(?)
 - 空间复杂度：O(?)
 
 ## 算法步骤
-（5-10步）
+1. 步骤1描述
+2. 步骤2描述
+...
 
 ## 代码实现
-` + "```{language}" + `
-完整代码
+` + "```{{.language}}" + `
+完整可运行代码
 ` + "```" + `
 
-请保持回答专业、准确。`
+### 第二部分：动画 JSON
+输出一个 JSON 对象，包含以下字段：
+
+{
+  "svgW": 数字（SVG 宽度，按元素数量估算，比如 7个数组元素约500，4个链表节点约400，5个树节点约560，DP表约400），
+  "svgH": 数字（SVG 高度，数组约200，树约380，DP表约230），
+  "elements": [
+    {
+      "id": "唯一ID（如cell_0, edge_1, ptr_l, head_label）",
+      "kind": "rect|circle|line|label",
+      "x": 数字, "y": 数字,
+      "w": 数字（仅rect）, "h": 数字（仅rect）,
+      "r": 数字（仅circle，建议22）,
+      "x2": 数字（仅line终点X）, "y2": 数字（仅line终点Y）,
+      "text": "显示文字",
+      "style": "normal|highlight|compare|swap|result|pivot|dim",
+      "rx": 数字（rect圆角，建议6）,
+      "arrow": true/false（line是否有箭头）,
+      "visible": true
+    }
+  ],
+  "frames": [
+    {
+      "desc": "本步骤的文字描述",
+      "delta": {
+        "element_id": {"style": "highlight", "text": "新文字"},
+        "element_id": {"x": 新X坐标}
+      }
+    }
+  ]
+}
+
+## 元素类型说明
+
+- **rect**: 数组格、链表节点、DP表单元格。数组格通常 w=44~52, h=40~44, gap=52~56
+  例: {"id":"cell_0","kind":"rect","x":30,"y":55,"w":48,"h":42,"text":"2","style":"normal","rx":6,"visible":true}
+- **circle**: 树节点。r=22
+  例: {"id":"n_1","kind":"circle","x":300,"y":50,"r":22,"text":"1","style":"normal","visible":true}
+- **line**: 边、指针、窗口标记。需要 x2,y2 表示终点。arrow=true 时画箭头
+  例: {"id":"edge_0","kind":"line","x":300,"y":72,"x2":170,"y2":138,"style":"#4b5563","visible":true}
+- **label**: 纯文本标签
+  例: {"id":"ptr_l","kind":"label","x":56,"y":34,"text":"▲ L","style":"dim"}
+
+## 颜色风格（style 字段）
+- "normal" = 灰色（未操作）
+- "highlight" = 蓝色（当前焦点）
+- "compare" = 黄色（比较中）
+- "swap" = 红色（交换中）
+- "result" = 绿色（最终结果）
+- "pivot" = 紫色（基准/中枢）
+- "dim" = 暗灰（已操作过/非活跃）
+- "#3b82f6"等 = 直接指定颜色（仅用于 line 的 style）
+
+## 帧（frames）规则
+- 每帧只描述相对于上一帧的**变化量**（delta）
+- delta 的 key 是元素 ID，value 是该元素变化的属性
+- 不变的元素不用写
+- 第一帧可以设置初始状态（各元素的style）
+- 最后一帧标记 result 元素
+
+## 示例
+
+用户: 反转链表
+
+---ANIM---
+{
+  "svgW": 380, "svgH": 180,
+  "elements": [
+    {"id":"n0","kind":"rect","x":30,"y":50,"w":52,"h":38,"text":"1","style":"normal","rx":6,"visible":true},
+    {"id":"n1","kind":"rect","x":160,"y":50,"w":52,"h":38,"text":"2","style":"normal","rx":6,"visible":true},
+    {"id":"n2","kind":"rect","x":290,"y":50,"w":52,"h":38,"text":"3","style":"normal","rx":6,"visible":true},
+    {"id":"e0","kind":"line","x":82,"y":69,"x2":160,"y2":69,"style":"#4b5563","arrow":true,"visible":true},
+    {"id":"e1","kind":"line","x":212,"y":69,"x2":290,"y2":69,"style":"#4b5563","arrow":true,"visible":true},
+    {"id":"head","kind":"label","x":56,"y":34,"text":"head","style":"dim"}
+  ],
+  "frames": [
+    {"desc":"初始链表: 1→2→3","delta":{"n0":{"style":"highlight"},"head":{"text":"head"}}},
+    {"desc":"prev=nil, curr=1, next=2","delta":{"n0":{"style":"highlight"},"n1":{"style":"highlight"}}},
+    {"desc":"1.Next→nil, prev=1, curr=2","delta":{"n0":{"style":"result"},"n1":{"style":"highlight"},"e0":{"style":"#6b7280"}}},
+    {"desc":"2.Next→1, prev=2, curr=3","delta":{"n1":{"style":"result"},"n2":{"style":"highlight"}}},
+    {"desc":"3.Next→2, prev=3, curr=nil 完成","delta":{"n2":{"style":"result"},"head":{"text":"new head","x":316,"y":34}}}
+  ]
+}
+
+请严格按此格式输出。`
 
 type Client struct {
 	model    *deepseek.ChatModel
@@ -95,9 +177,9 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	graph := compose.NewGraph[map[string]any, *schema.Message]()
 
-	template := prompt.FromMessages(schema.FString,
+	template := prompt.FromMessages(schema.GoTemplate,
 		schema.SystemMessage(systemPrompt),
-		schema.UserMessage("题目: {problem}\n语言: {language}"),
+		schema.UserMessage("题目: {{.problem}}\n语言: {{.language}}"),
 	)
 	if err := graph.AddChatTemplateNode("template", template); err != nil {
 		return nil, err

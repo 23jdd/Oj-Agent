@@ -23,9 +23,9 @@ func main() {
 		model := os.Getenv("DEEPSEEK_MODEL")
 		if model == "" { model = os.Getenv("LLM_MODEL") }
 		if model == "" { model = "deepseek-chat" }
-		log.Printf("LLM: DeepSeek enabled (%s)", model)
+		log.Printf("LLM: %s ready", model)
 	} else {
-		log.Println("LLM: no API key configured, using mock data")
+		log.Println("LLM: no API key configured — user will be prompted in UI")
 	}
 
 	chatService := NewChatService(llmClient)

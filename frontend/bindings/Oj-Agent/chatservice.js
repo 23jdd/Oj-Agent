@@ -19,6 +19,13 @@ export function DeleteSession(sessionID) {
 }
 
 /**
+ * @returns {$CancellablePromise<string>}
+ */
+export function GetLLMStatus() {
+    return $Call.ByID(3210753570);
+}
+
+/**
  * @param {string} sessionID
  * @returns {$CancellablePromise<$models.ChatSession | null>}
  */
@@ -63,6 +70,16 @@ export function SendMessage(req) {
     return $Call.ByID(1063940756, req).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType5($result);
     }));
+}
+
+/**
+ * @param {string} apiKey
+ * @param {string} baseURL
+ * @param {string} model
+ * @returns {$CancellablePromise<string>}
+ */
+export function UpdateLLMConfig(apiKey, baseURL, model) {
+    return $Call.ByID(1268131583, apiKey, baseURL, model);
 }
 
 // Private type creation functions

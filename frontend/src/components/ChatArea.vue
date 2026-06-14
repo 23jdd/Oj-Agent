@@ -6,9 +6,10 @@ import { NewSession, SendMessage } from '../../bindings/Oj-Agent/chatservice'
 import { SendMessageRequest } from '../../bindings/Oj-Agent/models'
 
 const props = defineProps({ messages: Array, sessionId: String })
+const emit = defineEmits(['openSettings'])
 
 const inputText = ref('')
-const selectedModel = ref('gpt-4o')
+const selectedModel = inject('selectedModel', ref('deepseek-chat'))
 const selectedLanguage = ref('go')
 const loading = ref(false)
 const chatContainer = ref(null)
@@ -16,8 +17,9 @@ const tokenUsage = inject('tokenUsage')
 const sessions = inject('sessions')
 const activeSessionId = inject('activeSessionId')
 const animationData = inject('animationData')
+const llmStatus = inject('llmStatus', null)
 
-const models = ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo', 'deepseek-v3']
+const models = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
 const hints = [
   { label: '两数之和', text: '两数之和，用哈希表实现 O(n)' },
@@ -107,6 +109,11 @@ const renderContent = (content) => {
         </select>
         <span class="tool-hint">Ctrl + Enter</span>
       </div>
+      <button class="settings-btn" @click="emit('openSettings')" title="模型设置">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
     </div>
 
     <div class="message-list" ref="chatContainer">
@@ -119,6 +126,12 @@ const renderContent = (content) => {
         </div>
         <h2>OJ Agent</h2>
         <p>输入算法题目，生成可视化题解动画<br/>支持数组、链表、树、DP、排序等多种题型</p>
+        <div v-if="llmStatus === 'mock'" class="mock-notice" @click="emit('openSettings')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>未配置 API Key，当前使用模拟数据。点击设置 →</span>
+        </div>
         <div class="hints">
           <span v-for="h in hints" :key="h.label" class="hint-tag" @click="inputText = h.text; sendMessage()">{{ h.label }}</span>
         </div>
@@ -184,6 +197,13 @@ const renderContent = (content) => {
 .tool-select:hover { border-color: #484f58; }
 .tool-select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
 .tool-hint { font-size: 10px; color: var(--text-muted); background: var(--bg-main); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border-subtle); letter-spacing: 0.5px; }
+.settings-btn {
+  width: 32px; height: 32px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  background: var(--bg-main); color: var(--text-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+}
+.settings-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: #484f58; }
 
 /* ---- Message List ---- */
 .message-list { flex: 1; overflow-y: auto; padding: 24px 28px 8px; }
@@ -210,7 +230,14 @@ const renderContent = (content) => {
   50% { box-shadow: 0 0 60px rgba(59,130,246,0.35), 0 8px 32px rgba(0,0,0,0.4); }
 }
 .welcome h2 { font-size: 24px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; letter-spacing: -0.5px; position: relative; }
-.welcome p { font-size: 13px; color: var(--text-muted); margin-bottom: 32px; line-height: 1.7; position: relative; }
+.welcome p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7; position: relative; }
+.mock-notice {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 24px; position: relative;
+  padding: 10px 18px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25);
+  border-radius: var(--radius-md); font-size: 12px; color: #f59e0b; cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.mock-notice:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); }
 .hints { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 480px; position: relative; }
 .hint-tag {
   padding: 9px 18px; background: rgba(28,33,41,0.8); border: 1px solid var(--border-subtle);
