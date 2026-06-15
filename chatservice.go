@@ -36,9 +36,10 @@ const (
 )
 
 type Message struct {
-	Role    Role      `json:"role"`
-	Content string    `json:"content"`
-	Time    time.Time `json:"time"`
+	Role      Role        `json:"role"`
+	Content   string      `json:"content"`
+	Time      time.Time   `json:"time"`
+	Animation UnifiedAnim `json:"animation,omitempty"`
 }
 
 type ChatSession struct {
@@ -154,11 +155,17 @@ func (c *ChatService) loadFromDB() {
 		}
 		for _, mr := range msgs {
 			t, _ := time.Parse(time.RFC3339Nano, mr.Time)
-			session.Messages = append(session.Messages, Message{
+			msg := Message{
 				Role:    Role(mr.Role),
 				Content: mr.Content,
 				Time:    t,
-			})
+			}
+			if mr.Animation != "" {
+				if a, ok := parseAnimJSON(mr.Animation); ok {
+					msg.Animation = a
+				}
+			}
+			session.Messages = append(session.Messages, msg)
 		}
 
 		c.sessions[sr.ID] = session
@@ -365,15 +372,22 @@ func (c *ChatService) streamGenerate(sessionID, content, language string) {
 		return
 	}
 
-	assistantMsg := Message{Role: RoleAssistant, Content: assistantContent, Time: time.Now()}
+	assistantMsg := Message{Role: RoleAssistant, Content: assistantContent, Time: time.Now(), Animation: anim}
 	session.Messages = append(session.Messages, assistantMsg)
 	session.UpdatedAt = time.Now()
 
 	if c.db != nil {
 		c.saveSessionMeta(session)
+		var animationJSON string
+		if anim.Elements != nil && anim.Frames != nil {
+			if b, err := json.Marshal(anim); err == nil {
+				animationJSON = string(b)
+			}
+		}
 		_ = c.db.InsertMessage(sessionID, &storage.MessageRow{
 			SessionID: sessionID, Role: string(RoleAssistant),
 			Content: assistantContent, Time: assistantMsg.Time.Format(time.RFC3339Nano),
+			Animation: animationJSON,
 		})
 	}
 

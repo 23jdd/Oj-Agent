@@ -262,6 +262,13 @@ export class Message {
              */
             this["time"] = null;
         }
+        if (!("animation" in $$source)) {
+            /**
+             * @member
+             * @type {UnifiedAnim | undefined}
+             */
+            this["animation"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -272,7 +279,11 @@ export class Message {
      * @returns {Message}
      */
     static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("animation" in $$parsedSource && $$parsedSource["animation"]) {
+            $$parsedSource["animation"] = $$createField3_0($$parsedSource["animation"]);
+        }
         return new Message(/** @type {Partial<Message>} */($$parsedSource));
     }
 }

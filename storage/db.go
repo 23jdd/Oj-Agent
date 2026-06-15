@@ -65,7 +65,21 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	_ = db.addColumnIfNotExists("messages", "animation", "TEXT DEFAULT ''")
+
 	return nil
+}
+
+func (db *DB) addColumnIfNotExists(table, column, def string) error {
+	var count int
+	err := db.conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		_, err = db.conn.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, def))
+	}
+	return err
 }
 
 type SessionRow struct {
@@ -81,6 +95,7 @@ type MessageRow struct {
 	Role      string
 	Content   string
 	Time      string
+	Animation string
 }
 
 func (db *DB) InsertSession(s *SessionRow) error {
@@ -147,15 +162,15 @@ func (db *DB) GetSession(id string) (*SessionRow, error) {
 
 func (db *DB) InsertMessage(sessionID string, m *MessageRow) error {
 	_, err := db.conn.Exec(
-		`INSERT INTO messages (session_id, role, content, time) VALUES (?, ?, ?, ?)`,
-		sessionID, m.Role, m.Content, m.Time,
+		`INSERT INTO messages (session_id, role, content, time, animation) VALUES (?, ?, ?, ?, ?)`,
+		sessionID, m.Role, m.Content, m.Time, m.Animation,
 	)
 	return err
 }
 
 func (db *DB) GetMessages(sessionID string) ([]MessageRow, error) {
 	rows, err := db.conn.Query(
-		`SELECT id, session_id, role, content, time FROM messages WHERE session_id = ? ORDER BY id ASC`,
+		`SELECT id, session_id, role, content, time, animation FROM messages WHERE session_id = ? ORDER BY id ASC`,
 		sessionID,
 	)
 	if err != nil {
@@ -166,7 +181,7 @@ func (db *DB) GetMessages(sessionID string) ([]MessageRow, error) {
 	var result []MessageRow
 	for rows.Next() {
 		var m MessageRow
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.Time); err != nil {
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.Time, &m.Animation); err != nil {
 			return nil, err
 		}
 		result = append(result, m)

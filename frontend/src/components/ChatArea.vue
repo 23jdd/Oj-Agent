@@ -63,6 +63,7 @@ onMounted(() => {
     const data = event.data || {}
     const sid = data.sessionId || ''
     const isCurrent = sid === props.sessionId
+    const hasAnim = data.animation && data.animation.elements?.length && data.animation.frames?.length
     if (sid) {
       const st = streamStates[sid]
       if (st) {
@@ -70,11 +71,11 @@ onMounted(() => {
         st.loading = false
       }
       if (addMessage) {
-        addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString() })
+        addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString(), animation: hasAnim ? data.animation : undefined })
       }
     }
     if (data.tokenUsage) tokenUsage.value = data.tokenUsage
-    if (data.animation && isCurrent && data.animation.elements?.length && data.animation.frames?.length) animationData.value = data.animation
+    if (hasAnim && isCurrent) animationData.value = data.animation
     if (sid && sessions.value) {
       const sil = sessions.value.find(s => s.id === sid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
@@ -160,9 +161,10 @@ const sendMessage = async () => {
     if (!addMessage) return
     addMessage(currentSid, { role: 'user', content: response.userMessage.content, time: response.userMessage.time })
     if (response.assistantMessage.content) {
-      addMessage(currentSid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
+      const hasAnim = response.animation && response.animation.elements?.length
+      addMessage(currentSid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time, animation: hasAnim ? response.animation : undefined })
       if (response.tokenUsage) tokenUsage.value = response.tokenUsage
-      if (response.animation) animationData.value = response.animation
+      if (hasAnim) animationData.value = response.animation
       if (streamStates[currentSid]) streamStates[currentSid].loading = false
       const sil = sessions.value.find(s => s.id === currentSid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
@@ -251,6 +253,9 @@ const renderContent = (content) => {
           <div class="message-role">{{ msg.role === 'user' ? '你' : 'OJ Agent' }}</div>
           <div v-if="msg.role === 'user'" class="message-text">{{ msg.content }}</div>
           <div v-else class="message-text" v-html="renderContent(msg.content)"></div>
+        </div>
+        <div v-if="msg.animation && msg.animation.elements?.length" class="anim-badge" @click="animationData = msg.animation" title="查看动画">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
         </div>
       </div>
 
@@ -387,6 +392,25 @@ const renderContent = (content) => {
   background: var(--bg-elevated); color: var(--text-primary);
   border: 1px solid var(--border-subtle); border-bottom-left-radius: 4px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+/* ---- Animation Badge ---- */
+.anim-badge {
+  align-self: center; flex-shrink: 0;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(59,130,246,0.12);
+  color: var(--accent);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: all 0.25s ease;
+}
+.anim-badge:hover {
+  opacity: 1;
+  background: rgba(59,130,246,0.25);
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(59,130,246,0.35);
 }
 
 /* ---- Markdown Content ---- */
