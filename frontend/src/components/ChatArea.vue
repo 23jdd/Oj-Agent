@@ -22,6 +22,7 @@ const llmStatus = inject('llmStatus', null)
 
 const streamingContent = ref('')
 const currentStreamingId = ref('')
+const addMessage = inject('addMessage')
 
 const models = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
@@ -51,11 +52,12 @@ onMounted(() => {
     const data = event.data || {}
     streamingContent.value = ''
     loading.value = false
-    if (!props.messages) return
-    props.messages.push({ role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString() })
+    const sid = data.sessionId || currentStreamingId.value
+    if (sid && addMessage) {
+      addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString() })
+    }
     if (data.tokenUsage) tokenUsage.value = data.tokenUsage
     if (data.animation && data.animation.elements?.length && data.animation.frames?.length) animationData.value = data.animation
-    const sid = currentStreamingId.value || data.sessionId
     currentStreamingId.value = ''
     if (sid && sessions.value) {
       const sil = sessions.value.find(s => s.id === sid)
@@ -67,8 +69,10 @@ onMounted(() => {
   unsubError = Events.On('chat-error', (event) => {
     streamingContent.value = ''
     loading.value = false
-    if (!props.messages) return
-    props.messages.push({ role: 'assistant', content: event.data.content || '发生未知错误。', time: new Date().toISOString() })
+    const sid = event.data.sessionId || currentStreamingId.value
+    if (sid && addMessage) {
+      addMessage(sid, { role: 'assistant', content: event.data.content || '发生未知错误。', time: new Date().toISOString() })
+    }
     currentStreamingId.value = ''
     scrollToBottom()
   })
@@ -108,10 +112,10 @@ const sendMessage = async () => {
     }
     const req = new SendMessageRequest({ sessionId: sid, content: text, model: selectedModel.value, language: selectedLanguage.value })
     const response = await SendMessage(req)
-    if (!props.messages) return
-    props.messages.push({ role: 'user', content: response.userMessage.content, time: response.userMessage.time })
+    if (!addMessage) return
+    addMessage(sid, { role: 'user', content: response.userMessage.content, time: response.userMessage.time })
     if (response.assistantMessage.content) {
-      props.messages.push({ role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
+      addMessage(sid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
       if (response.tokenUsage) tokenUsage.value = response.tokenUsage
       if (response.animation) animationData.value = response.animation
       loading.value = false
@@ -120,8 +124,8 @@ const sendMessage = async () => {
     }
     currentStreamingId.value = sid
   } catch (e) {
-    console.error(e); if (!props.messages) return
-    props.messages.push({ role: 'assistant', content: '发送失败，请重试。', time: new Date().toISOString() })
+    console.error(e); if (!addMessage) return
+    addMessage(sid || currentStreamingId.value || '', { role: 'assistant', content: '发送失败，请重试。', time: new Date().toISOString() })
     loading.value = false; streamingContent.value = ''
   } finally { scrollToBottom() }
 }

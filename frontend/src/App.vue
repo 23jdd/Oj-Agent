@@ -4,25 +4,61 @@ import ChatArea from './components/ChatArea.vue'
 import AnimationPanel from './components/AnimationPanel.vue'
 import TokenBar from './components/TokenBar.vue'
 import SettingsModal from './components/SettingsModal.vue'
-import { ref, provide, onMounted } from 'vue'
-import { GetLLMStatus } from '../bindings/Oj-Agent/chatservice'
+import { ref, reactive, computed, watch, provide, onMounted } from 'vue'
+import { GetLLMStatus, GetSession } from '../bindings/Oj-Agent/chatservice'
 
 const activeSessionId = ref('')
 const sessions = ref([])
 const tokenUsage = ref({ sessionTokens: 0, totalTokens: 0 })
-const messages = ref([])
+const allMessages = reactive({})
 const animationData = ref(null)
 const showSettings = ref(false)
 const selectedModel = ref('deepseek-chat')
 const llmStatus = ref('checking')
 
+const currentMessages = computed(() => {
+  const sid = activeSessionId.value
+  if (!sid) return []
+  if (!allMessages[sid]) allMessages[sid] = []
+  return allMessages[sid]
+})
+
+function addMessage(sessionId, message) {
+  if (!allMessages[sessionId]) allMessages[sessionId] = []
+  allMessages[sessionId].push(message)
+}
+
+async function loadSessionMessages(sid) {
+  if (!sid) return
+  try {
+    const session = await GetSession(sid)
+    if (session && session.messages && session.messages.length > 0) {
+      if (!allMessages[sid]) allMessages[sid] = []
+      const existing = allMessages[sid]
+      if (existing.length < session.messages.length) {
+        allMessages[sid] = session.messages.map(m => ({ ...m }))
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load session messages:', e)
+  }
+}
+
+watch(activeSessionId, (newId) => {
+  if (newId) {
+    loadSessionMessages(newId)
+    animationData.value = null
+  }
+})
+
 provide('activeSessionId', activeSessionId)
 provide('sessions', sessions)
 provide('tokenUsage', tokenUsage)
-provide('messages', messages)
+provide('messages', currentMessages)
 provide('animationData', animationData)
 provide('selectedModel', selectedModel)
 provide('llmStatus', llmStatus)
+provide('addMessage', addMessage)
 
 onMounted(async () => {
   try {
@@ -40,10 +76,10 @@ onMounted(async () => {
         :sessions="sessions"
         :activeId="activeSessionId"
         @select="activeSessionId = $event"
-        @new="activeSessionId = ''; messages = []; animationData = null"
+        @new="activeSessionId = ''; animationData = null"
       />
       <ChatArea
-        :messages="messages"
+        :messages="currentMessages"
         :sessionId="activeSessionId"
         @open-settings="showSettings = true"
       />
