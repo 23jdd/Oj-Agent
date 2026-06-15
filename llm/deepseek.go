@@ -13,7 +13,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var systemPrompt = `你是一个算法题解动画生成助手。根据用户输入的算法题目，生成详细的题解和动画步骤。
+var ojSystemPrompt = `你是一个算法题解动画生成助手。根据用户输入的算法题目，生成详细的题解和动画步骤。
 
 ## 输出格式
 
@@ -93,7 +93,7 @@ var systemPrompt = `你是一个算法题解动画生成助手。根据用户输
 - "#3b82f6"等 = 直接指定颜色（仅用于 line 的 style）
 
 ## 帧（frames）规则
-- 每帧只描述相对于上一帧的**变化量**（delta）
+- 每帧只描述相对于上一帧的**变化量**（delta），but 每帧应该拥有完整的信息 
 - delta 的 key 是元素 ID，value 是该元素变化的属性
 - 不变的元素不用写
 - 第一帧可以设置初始状态（各元素的style）
@@ -124,6 +124,8 @@ var systemPrompt = `你是一个算法题解动画生成助手。根据用户输
 }
 
 请严格按此格式输出。`
+
+var generalSystemPrompt = `你是一个有用的AI助手。请用中文回答用户的问题。回答应简洁、准确、有帮助。`
 
 type Client struct {
 	model    *deepseek.ChatModel
@@ -177,11 +179,19 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	graph := compose.NewGraph[map[string]any, *schema.Message]()
 
-	template := prompt.FromMessages(schema.GoTemplate,
-		schema.SystemMessage(systemPrompt),
+	ojTemplate := prompt.FromMessages(schema.GoTemplate,
+		schema.SystemMessage(ojSystemPrompt),
 		schema.UserMessage("题目: {{.problem}}\n语言: {{.language}}"),
 	)
-	if err := graph.AddChatTemplateNode("template", template); err != nil {
+	if err := graph.AddChatTemplateNode("oj_template", ojTemplate); err != nil {
+		return nil, err
+	}
+
+	generalTemplate := prompt.FromMessages(schema.GoTemplate,
+		schema.SystemMessage(generalSystemPrompt),
+		schema.UserMessage("{{.problem}}"),
+	)
+	if err := graph.AddChatTemplateNode("general_template", generalTemplate); err != nil {
 		return nil, err
 	}
 
@@ -189,8 +199,22 @@ func NewClient(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
-	graph.AddEdge(compose.START, "template")
-	graph.AddEdge("template", "model")
+	graph.AddBranch(compose.START, compose.NewGraphBranch(
+		func(ctx context.Context, input map[string]any) (string, error) {
+			problem, _ := input["problem"].(string)
+			if isOJProblem(problem) {
+				return "oj_template", nil
+			}
+			return "general_template", nil
+		},
+		map[string]bool{
+			"oj_template":      true,
+			"general_template": true,
+		},
+	))
+
+	graph.AddEdge("oj_template", "model")
+	graph.AddEdge("general_template", "model")
 	graph.AddEdge("model", compose.END)
 
 	runnable, err := graph.Compile(context.Background())
@@ -226,6 +250,31 @@ func (c *Client) Stream(ctx context.Context, problem string, language string) (*
 		"language": language,
 	}
 	return c.runnable.Stream(ctx, input)
+}
+
+func isOJProblem(problem string) bool {
+	p := strings.ToLower(problem)
+	ojKeywords := []string{
+		"算法", "题解", "时间复杂度", "空间复杂度",
+		"数组", "链表", "树", "排序", "查找", "遍历",
+		"dp", "动态规划", "递归", "二叉树", "图", "堆", "栈", "队列",
+		"哈希", "双指针", "滑动窗口", "回溯", "贪心", "分治", "二分",
+		"前缀和", "并查集", "字典树", "拓扑", "最短路", "最小生成树",
+		"two sum", "reverse", "traversal", "sort", "search",
+		"dynamic programming", "binary search", "bfs", "dfs",
+		"leetcode", "力扣", "牛客", "acm", "ac ", "oj",
+		"题目", "代码实现", "时间复杂度", "空间复杂度",
+		"反转链表", "合并", "子集", "排列", "组合",
+		"背包", "快排", "快速排序", "归并", "冒泡",
+		"最长", "最大", "最小", "路径", "深度", "广度",
+		"中序遍历", "前序遍历", "后序遍历", "层序遍历",
+	}
+	for _, kw := range ojKeywords {
+		if strings.Contains(p, kw) {
+			return true
+		}
+	}
+	return false
 }
 
 var _ = strings.TrimSpace
