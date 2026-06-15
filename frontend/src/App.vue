@@ -81,7 +81,18 @@ provide('ensureStreamState', ensureStreamState)
 
 onMounted(async () => {
   try {
-    llmStatus.value = await GetLLMStatus()
+    const raw = await GetLLMStatus()
+    try {
+      const info = JSON.parse(raw)
+      llmStatus.value = info.status || raw
+      const savedCfg = localStorage.getItem('oj-agent-config')
+      const savedModel = savedCfg ? (() => { try { return JSON.parse(savedCfg).model } catch { return null } })() : null
+      if (info.model && !savedModel) {
+        selectedModel.value = info.model
+      }
+    } catch {
+      llmStatus.value = raw
+    }
   } catch (e) {
     llmStatus.value = 'mock'
   }

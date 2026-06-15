@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onBeforeUnmount, computed } from 'vue'
+import { ref, watch, onBeforeUnmount, onMounted, onUnmounted, computed } from 'vue'
 import UniversalRenderer from './anim/UniversalRenderer.vue'
 
 const props = defineProps({ animationData: Object })
@@ -7,13 +7,16 @@ const props = defineProps({ animationData: Object })
 const isPlaying = ref(false)
 const currentStepIndex = ref(-1)
 let animationTimer = null
-const stepDuration = 2000
+const speedOptions = [0.5, 1, 1.5, 2, 3]
+const speedIdx = ref(1)
+const speed = computed(() => speedOptions[speedIdx.value])
 
 const steps = computed(() => props.animationData?.frames || [])
 const elements = computed(() => props.animationData?.elements || [])
 const svgW = computed(() => props.animationData?.svgW || 400)
 const svgH = computed(() => props.animationData?.svgH || 250)
 const maxStep = computed(() => Math.max(0, steps.value.length - 1))
+const stepDuration = computed(() => 2000 / speed.value)
 const progress = computed(() => currentStepIndex.value >= 0 ? ((currentStepIndex.value + 1) / steps.value.length * 100) : 0)
 
 function currentDesc() {
@@ -29,16 +32,34 @@ function start() {
   animationTimer = setTimeout(() => {
     if (currentStepIndex.value < steps.value.length - 1 && isPlaying.value) start()
     else isPlaying.value = false
-  }, stepDuration)
+  }, stepDuration.value)
 }
 
 function play() { isPlaying.value = true; start() }
 function pause() { isPlaying.value = false; if (animationTimer) clearTimeout(animationTimer) }
-function stepNext() { if (currentStepIndex.value < maxStep.value) currentStepIndex.value++ }
-function stepPrev() { if (currentStepIndex.value > 0) currentStepIndex.value-- }
+function stepNext() { if (currentStepIndex.value < maxStep.value) { pause(); currentStepIndex.value++ } }
+function stepPrev() { if (currentStepIndex.value > 0) { pause(); currentStepIndex.value-- } }
 function reset() { pause(); currentStepIndex.value = -1 }
+function goToStep(i) { currentStepIndex.value = i; pause() }
+function cycleSpeed() { speedIdx.value = (speedIdx.value + 1) % speedOptions.length }
 
-watch(() => props.animationData, () => reset())
+watch(() => props.animationData, (data) => {
+  reset()
+  if (data?.frames?.length) {
+    setTimeout(() => play(), 300)
+  }
+})
+
+function handleKey(e) {
+  if (steps.value.length === 0) return
+  if (e.code === 'Space') { e.preventDefault(); isPlaying.value ? pause() : play() }
+  if (e.code === 'ArrowRight') { e.preventDefault(); stepNext() }
+  if (e.code === 'ArrowLeft') { e.preventDefault(); stepPrev() }
+  if (e.code === 'KeyR') { e.preventDefault(); reset() }
+}
+
+onMounted(() => window.addEventListener('keydown', handleKey))
+onUnmounted(() => { window.removeEventListener('keydown', handleKey) })
 onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
 </script>
 
@@ -57,19 +78,22 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
         </div>
       </div>
       <div class="controls" v-if="steps.length > 0">
-        <button class="ctrl-btn" @click="stepPrev" :disabled="currentStepIndex <= 0" title="上一步">
+        <button class="ctrl-btn ctrl-speed" @click="cycleSpeed" :title="'速度: ' + speed + 'x'">
+          <span class="speed-label">{{ speed }}x</span>
+        </button>
+        <button class="ctrl-btn" @click="stepPrev" :disabled="currentStepIndex <= 0" title="上一步 (←)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
         </button>
-        <button v-if="!isPlaying" class="ctrl-btn ctrl-play" @click="play" title="播放">
+        <button v-if="!isPlaying" class="ctrl-btn ctrl-play" @click="play" title="播放 (Space)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
-        <button v-else class="ctrl-btn ctrl-play" @click="pause" title="暂停">
+        <button v-else class="ctrl-btn ctrl-play" @click="pause" title="暂停 (Space)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
         </button>
-        <button class="ctrl-btn" @click="stepNext" :disabled="currentStepIndex >= maxStep" title="下一步">
+        <button class="ctrl-btn" @click="stepNext" :disabled="currentStepIndex >= maxStep" title="下一步 (→)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
         </button>
-        <button class="ctrl-btn" @click="reset" title="重置">
+        <button class="ctrl-btn" @click="reset" title="重置 (R)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><path d="M1 10a11 11 0 0022 0"/></svg>
         </button>
       </div>
@@ -83,6 +107,11 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
           </svg>
         </div>
         <p>输入题目后<br/>此处展示算法动画</p>
+        <div class="kbd-hints">
+          <span><kbd>Space</kbd> 播放</span>
+          <span><kbd>← →</kbd> 步进</span>
+          <span><kbd>R</kbd> 重置</span>
+        </div>
       </div>
       <div v-else class="renderer-area">
         <div class="renderer-frame">
@@ -102,7 +131,7 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
       <div class="step-dots">
         <span v-for="(_, i) in steps" :key="i"
           :class="['dot', { done: i <= currentStepIndex, active: i === currentStepIndex }]"
-          @click="currentStepIndex = i; pause()"
+          @click="goToStep(i)"
           :title="steps[i]?.desc"
         ></span>
       </div>
@@ -131,18 +160,29 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
   width:30px; height:30px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);
   background:var(--bg-elevated); color:var(--text-secondary); cursor:pointer;
   display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;
+  font-family:var(--font-main);
 }
 .ctrl-btn:hover:not(:disabled) { background:var(--bg-hover); color:var(--text-primary); border-color:#484f58; transform:translateY(-1px); }
 .ctrl-btn:active:not(:disabled) { transform:scale(0.95); }
 .ctrl-btn:disabled { opacity:0.3; cursor:not-allowed; }
 .ctrl-play { background:rgba(59,130,246,0.15); border-color:rgba(59,130,246,0.25); color:var(--accent); }
 .ctrl-play:hover:not(:disabled) { background:rgba(59,130,246,0.25); border-color:rgba(59,130,246,0.4); }
+.ctrl-speed { width:auto; padding:0 8px; font-size:10px; font-weight:700; letter-spacing:0.5px; }
+.ctrl-speed:hover { color:var(--accent); border-color:rgba(59,130,246,0.3); }
+.speed-label { font-variant-numeric:tabular-nums; }
 
 .canvas-container { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; padding:16px; min-height:0; }
 
 .empty-state { text-align:center; }
 .empty-icon { margin:0 auto 16px; display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; background:rgba(48,54,61,0.3); }
-.empty-state p { font-size:12px; color:var(--text-muted); line-height:1.7; }
+.empty-state p { font-size:12px; color:var(--text-muted); line-height:1.7; margin-bottom:14px; }
+
+.kbd-hints { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+.kbd-hints span { font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
+.kbd-hints kbd {
+  padding:1px 6px; background:var(--bg-elevated); border:1px solid var(--border-subtle);
+  border-radius:3px; font-size:10px; font-family:var(--font-mono); color:var(--text-secondary);
+}
 
 .renderer-area { display:flex; flex-direction:column; align-items:center; gap:12px; width:100%; }
 .renderer-frame {

@@ -455,13 +455,21 @@ func (c *ChatService) UpdateLLMConfig(apiKey, baseURL, model string) string {
 	return "连接成功，模型: " + model
 }
 
+type statusInfo struct {
+	Status string `json:"status"`
+	Model  string `json:"model"`
+}
+
 func (c *ChatService) GetLLMStatus() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	s := statusInfo{Status: "mock"}
 	if c.llmClient != nil && c.llmClient.Available() {
-		return "connected"
+		s.Status = "connected"
+		s.Model = c.llmClient.Model()
 	}
-	return "mock"
+	b, _ := json.Marshal(s)
+	return string(b)
 }
 
 func estimateTokens(text string) int {

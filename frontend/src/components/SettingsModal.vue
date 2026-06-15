@@ -16,8 +16,13 @@ const testing = ref(false)
 
 onMounted(async () => {
   try {
-    const s = await GetLLMStatus()
-    status.value = s === 'connected' ? 'connected' : 'mock'
+    const raw = await GetLLMStatus()
+    try {
+      const info = JSON.parse(raw)
+      status.value = info.status === 'connected' ? 'connected' : 'mock'
+    } catch {
+      status.value = raw === 'connected' ? 'connected' : 'mock'
+    }
   } catch (e) { status.value = 'mock' }
 
   const saved = localStorage.getItem('oj-agent-config')

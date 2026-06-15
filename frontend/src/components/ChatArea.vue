@@ -33,21 +33,6 @@ const sessionStreaming = computed(() => {
   return st ? st.content : ''
 })
 
-const defaultModels = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
-
-const modelOptions = computed(() => {
-  const list = [...defaultModels]
-  const cur = selectedModel.value
-  if (cur && !list.includes(cur)) list.unshift(cur)
-  try {
-    const saved = localStorage.getItem('oj-agent-config')
-    if (saved) {
-      const cfg = JSON.parse(saved)
-      if (cfg.model && !list.includes(cfg.model)) list.unshift(cfg.model)
-    }
-  } catch (e) {}
-  return list
-})
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
 const hints = [
   { label: '两数之和', text: '两数之和，用哈希表实现 O(n)' },
