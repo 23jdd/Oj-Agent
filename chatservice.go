@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
 
 	"Oj-Agent/llm"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type Role string
@@ -156,7 +159,6 @@ func (c *ChatService) DeleteSession(sessionID string) error {
 
 func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	session, ok := c.sessions[req.SessionID]
 	if !ok {
@@ -172,52 +174,126 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 	if len(session.Messages) == 2 {
 		session.Title = truncateString(req.Content, 30)
 	}
-
-	var assistantMsg Message
-	var anim UnifiedAnim
+	session.UpdatedAt = time.Now()
 
 	if c.llmClient == nil || !c.llmClient.Available() {
-		assistantMsg = Message{
+		assistantMsg := Message{
 			Role:    RoleAssistant,
 			Content: "⚠️ 未配置 API Key，请点击右上角 ⚙ 设置 LLM 连接。\n\n支持 DeepSeek、OpenAI 兼容 API、Ollama 本地模型。",
 			Time:    time.Now(),
 		}
-		anim = UnifiedAnim{}
-	} else {
-		llmResponse, err := c.llmClient.Generate(context.Background(), req.Content, req.Language, "")
-		if err != nil {
-			assistantMsg = Message{
-				Role:    RoleAssistant,
-				Content: fmt.Sprintf("❌ LLM 调用失败: %s\n\n请检查 API Key 或网络连接，然后重试。", err.Error()),
-				Time:    time.Now(),
-			}
-			anim = UnifiedAnim{}
-		} else {
-			parsed := llm.ParseResponse(llmResponse)
-			assistantMsg = Message{Role: RoleAssistant, Content: parsed.Markdown, Time: time.Now()}
-			if parsed.HasAnim {
-				if a, ok := parseAnimJSON(parsed.AnimJSON); ok {
-					anim = a
-				}
-			}
+		session.Messages = append(session.Messages, assistantMsg)
+		c.mu.Unlock()
+		return SendMessageResponse{
+			UserMessage:      userMsg,
+			AssistantMessage: assistantMsg,
+			SessionID:        session.ID,
 		}
 	}
 
-	session.Messages = append(session.Messages, assistantMsg)
-	session.UpdatedAt = time.Now()
+	sessionID := session.ID
+	c.mu.Unlock()
 
-	inputTokens := estimateTokens(req.Content)
-	outputTokens := estimateTokens(assistantMsg.Content)
-	sessionTokens := inputTokens + outputTokens
-	c.totalTokens += sessionTokens
+	go c.streamGenerate(sessionID, req.Content, req.Language)
 
+	assistantMsg := Message{Role: RoleAssistant, Content: "", Time: time.Now()}
 	return SendMessageResponse{
 		UserMessage:      userMsg,
 		AssistantMessage: assistantMsg,
-		SessionID:        session.ID,
-		TokenUsage:       TokenUsage{SessionTokens: sessionTokens, TotalTokens: c.totalTokens},
-		Animation:        anim,
+		SessionID:        sessionID,
 	}
+}
+
+func (c *ChatService) streamGenerate(sessionID, content, language string) {
+	ctx := context.Background()
+	reader, err := c.llmClient.Stream(ctx, content, language)
+	if err != nil {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		session, ok := c.sessions[sessionID]
+		if !ok {
+			return
+		}
+		errMsg := Message{
+			Role:    RoleAssistant,
+			Content: fmt.Sprintf("❌ LLM 调用失败: %s\n\n请检查 API Key 或网络连接，然后重试。", err.Error()),
+			Time:    time.Now(),
+		}
+		session.Messages = append(session.Messages, errMsg)
+		session.UpdatedAt = time.Now()
+		emit("chat-error", map[string]any{
+			"sessionId": sessionID,
+			"content":   errMsg.Content,
+		})
+		return
+	}
+
+	var accumulated string
+	for {
+		msg, recvErr := reader.Recv()
+		if recvErr == io.EOF {
+			break
+		}
+		if recvErr != nil {
+			emit("chat-error", map[string]any{
+				"sessionId": sessionID,
+				"content":   fmt.Sprintf("流式读取错误: %v", recvErr),
+			})
+			return
+		}
+		accumulated += msg.Content
+		emit("chat-chunk", map[string]any{
+			"sessionId": sessionID,
+			"content":   accumulated,
+		})
+	}
+
+	parsed := llm.ParseResponse(accumulated)
+	assistantContent := parsed.Markdown
+	if assistantContent == "" {
+		assistantContent = accumulated
+	}
+
+	var anim UnifiedAnim
+	if parsed.HasAnim {
+		if a, ok := parseAnimJSON(parsed.AnimJSON); ok {
+			anim = a
+		}
+	}
+
+	c.mu.Lock()
+	session, ok := c.sessions[sessionID]
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+
+	assistantMsg := Message{Role: RoleAssistant, Content: assistantContent, Time: time.Now()}
+	session.Messages = append(session.Messages, assistantMsg)
+	session.UpdatedAt = time.Now()
+
+	inputTokens := estimateTokens(content)
+	outputTokens := estimateTokens(assistantContent)
+	sessionTokens := inputTokens + outputTokens
+	c.totalTokens += sessionTokens
+	tokenUsage := TokenUsage{SessionTokens: sessionTokens, TotalTokens: c.totalTokens}
+	c.mu.Unlock()
+
+	emit("chat-complete", map[string]any{
+		"sessionId":  sessionID,
+		"content":    assistantContent,
+		"time":       assistantMsg.Time,
+		"tokenUsage": tokenUsage,
+		"animation":  anim,
+	})
+}
+
+func emit(eventName string, data any) {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	app.Event.Emit(eventName, data)
 }
 
 func parseAnimJSON(raw string) (UnifiedAnim, bool) {

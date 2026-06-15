@@ -1,9 +1,10 @@
 <script setup>
-import { ref, nextTick, watch, inject, onUpdated } from 'vue'
+import { ref, nextTick, watch, inject, onUpdated, onMounted, onUnmounted } from 'vue'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { NewSession, SendMessage } from '../../bindings/Oj-Agent/chatservice'
 import { SendMessageRequest } from '../../bindings/Oj-Agent/models'
+import { Events } from '@wailsio/runtime'
 
 const props = defineProps({ messages: Array, sessionId: String })
 const emit = defineEmits(['openSettings'])
@@ -19,6 +20,9 @@ const activeSessionId = inject('activeSessionId')
 const animationData = inject('animationData')
 const llmStatus = inject('llmStatus', null)
 
+const streamingContent = ref('')
+const currentStreamingId = ref('')
+
 const models = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
 const hints = [
@@ -31,6 +35,50 @@ const hints = [
   { label: '盛水容器', text: '盛最多水的容器，双指针解法' },
   { label: '最长回文', text: '最长回文子串' },
 ]
+
+let unsubChunk = null
+let unsubComplete = null
+let unsubError = null
+
+onMounted(() => {
+  unsubChunk = Events.On('chat-chunk', (event) => {
+    streamingContent.value = event.data.content || ''
+    currentStreamingId.value = event.data.sessionId || ''
+    scrollToBottom()
+    handleHighlight()
+  })
+  unsubComplete = Events.On('chat-complete', (event) => {
+    const data = event.data || {}
+    streamingContent.value = ''
+    loading.value = false
+    if (!props.messages) return
+    props.messages.push({ role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString() })
+    if (data.tokenUsage) tokenUsage.value = data.tokenUsage
+    if (data.animation && data.animation.elements?.length && data.animation.frames?.length) animationData.value = data.animation
+    const sid = currentStreamingId.value || data.sessionId
+    currentStreamingId.value = ''
+    if (sid && sessions.value) {
+      const sil = sessions.value.find(s => s.id === sid)
+      if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
+    }
+    scrollToBottom()
+    handleHighlight()
+  })
+  unsubError = Events.On('chat-error', (event) => {
+    streamingContent.value = ''
+    loading.value = false
+    if (!props.messages) return
+    props.messages.push({ role: 'assistant', content: event.data.content || '发生未知错误。', time: new Date().toISOString() })
+    currentStreamingId.value = ''
+    scrollToBottom()
+  })
+})
+
+onUnmounted(() => {
+  if (unsubChunk) unsubChunk()
+  if (unsubComplete) unsubComplete()
+  if (unsubError) unsubError()
+})
 
 const scrollToBottom = () => {
   nextTick(() => { if (chatContainer.value) chatContainer.value.scrollTop = chatContainer.value.scrollHeight })
@@ -49,7 +97,7 @@ watch(() => props.messages?.length, () => { scrollToBottom(); handleHighlight() 
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || loading.value) return
-  loading.value = true; inputText.value = ''
+  loading.value = true; inputText.value = ''; streamingContent.value = ''
 
   try {
     let sid = props.sessionId
@@ -62,15 +110,20 @@ const sendMessage = async () => {
     const response = await SendMessage(req)
     if (!props.messages) return
     props.messages.push({ role: 'user', content: response.userMessage.content, time: response.userMessage.time })
-    props.messages.push({ role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
-    if (response.tokenUsage) tokenUsage.value = response.tokenUsage
-    if (response.animation) animationData.value = response.animation
-    const sil = sessions.value.find(s => s.id === sid)
-    if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
+    if (response.assistantMessage.content) {
+      props.messages.push({ role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
+      if (response.tokenUsage) tokenUsage.value = response.tokenUsage
+      if (response.animation) animationData.value = response.animation
+      loading.value = false
+      const sil = sessions.value.find(s => s.id === sid)
+      if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
+    }
+    currentStreamingId.value = sid
   } catch (e) {
     console.error(e); if (!props.messages) return
     props.messages.push({ role: 'assistant', content: '发送失败，请重试。', time: new Date().toISOString() })
-  } finally { loading.value = false; scrollToBottom() }
+    loading.value = false; streamingContent.value = ''
+  } finally { scrollToBottom() }
 }
 
 const handleKeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage() } }
@@ -155,7 +208,8 @@ const renderContent = (content) => {
         </div>
         <div class="message-body">
           <div class="message-role">OJ Agent</div>
-          <div class="typing-indicator"><span></span><span></span><span></span></div>
+          <div v-if="streamingContent" class="message-text" v-html="renderContent(streamingContent)"></div>
+          <div v-else class="typing-indicator"><span></span><span></span><span></span></div>
         </div>
       </div>
 
