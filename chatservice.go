@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"sync"
 	"time"
 
 	"Oj-Agent/llm"
+	"Oj-Agent/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -110,24 +112,81 @@ type ChatService struct {
 	sessions    map[string]*ChatSession
 	totalTokens int
 	llmClient   *llm.Client
+	db          *storage.DB
 }
 
-func NewChatService(llmClient *llm.Client) *ChatService {
-	return &ChatService{
+func NewChatService(llmClient *llm.Client, db *storage.DB) *ChatService {
+	cs := &ChatService{
 		sessions:  make(map[string]*ChatSession),
 		llmClient: llmClient,
+		db:        db,
 	}
+	cs.loadFromDB()
+	return cs
+}
+
+func (c *ChatService) loadFromDB() {
+	if c.db == nil {
+		return
+	}
+
+	rows, err := c.db.ListSessions()
+	if err != nil {
+		log.Printf("[ChatService] load sessions: %v", err)
+		return
+	}
+
+	for _, sr := range rows {
+		createdAt, _ := time.Parse(time.RFC3339Nano, sr.CreatedAt)
+		updatedAt, _ := time.Parse(time.RFC3339Nano, sr.UpdatedAt)
+
+		session := &ChatSession{
+			ID:        sr.ID,
+			Title:     sr.Title,
+			Messages:  []Message{},
+			CreatedAt: createdAt,
+			UpdatedAt: updatedAt,
+		}
+
+		msgs, err := c.db.GetMessages(sr.ID)
+		if err != nil {
+			log.Printf("[ChatService] load messages for %s: %v", sr.ID, err)
+		}
+		for _, mr := range msgs {
+			t, _ := time.Parse(time.RFC3339Nano, mr.Time)
+			session.Messages = append(session.Messages, Message{
+				Role:    Role(mr.Role),
+				Content: mr.Content,
+				Time:    t,
+			})
+		}
+
+		c.sessions[sr.ID] = session
+	}
+
+	log.Printf("[ChatService] loaded %d sessions from db", len(rows))
 }
 
 func (c *ChatService) NewSession() *ChatSession {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	id := fmt.Sprintf("session_%d", time.Now().UnixNano())
+	now := time.Now()
 	session := &ChatSession{
 		ID: id, Title: "新对话", Messages: []Message{},
-		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		CreatedAt: now, UpdatedAt: now,
 	}
 	c.sessions[id] = session
+
+	if c.db != nil {
+		_ = c.db.InsertSession(&storage.SessionRow{
+			ID:        id,
+			Title:     "新对话",
+			CreatedAt: now.Format(time.RFC3339Nano),
+			UpdatedAt: now.Format(time.RFC3339Nano),
+		})
+	}
+
 	return session
 }
 
@@ -154,6 +213,9 @@ func (c *ChatService) DeleteSession(sessionID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.sessions, sessionID)
+	if c.db != nil {
+		_ = c.db.DeleteSession(sessionID)
+	}
 	return nil
 }
 
@@ -162,11 +224,19 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 
 	session, ok := c.sessions[req.SessionID]
 	if !ok {
+		now := time.Now()
 		session = &ChatSession{
 			ID: req.SessionID, Title: req.Content, Messages: []Message{},
-			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+			CreatedAt: now, UpdatedAt: now,
 		}
 		c.sessions[req.SessionID] = session
+		if c.db != nil {
+			_ = c.db.InsertSession(&storage.SessionRow{
+				ID: req.SessionID, Title: req.Content,
+				CreatedAt: now.Format(time.RFC3339Nano),
+				UpdatedAt: now.Format(time.RFC3339Nano),
+			})
+		}
 	}
 
 	userMsg := Message{Role: RoleUser, Content: req.Content, Time: time.Now()}
@@ -176,6 +246,14 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 	}
 	session.UpdatedAt = time.Now()
 
+	if c.db != nil {
+		c.saveSessionMeta(session)
+		_ = c.db.InsertMessage(session.ID, &storage.MessageRow{
+			SessionID: session.ID, Role: string(RoleUser),
+			Content: req.Content, Time: userMsg.Time.Format(time.RFC3339Nano),
+		})
+	}
+
 	if c.llmClient == nil || !c.llmClient.Available() {
 		assistantMsg := Message{
 			Role:    RoleAssistant,
@@ -183,6 +261,12 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 			Time:    time.Now(),
 		}
 		session.Messages = append(session.Messages, assistantMsg)
+		if c.db != nil {
+			_ = c.db.InsertMessage(session.ID, &storage.MessageRow{
+				SessionID: session.ID, Role: string(RoleAssistant),
+				Content: assistantMsg.Content, Time: assistantMsg.Time.Format(time.RFC3339Nano),
+			})
+		}
 		c.mu.Unlock()
 		return SendMessageResponse{
 			UserMessage:      userMsg,
@@ -204,6 +288,13 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 	}
 }
 
+func (c *ChatService) saveSessionMeta(s *ChatSession) {
+	if c.db == nil {
+		return
+	}
+	_ = c.db.UpdateSession(s.ID, s.Title, s.UpdatedAt.Format(time.RFC3339Nano))
+}
+
 func (c *ChatService) streamGenerate(sessionID, content, language string) {
 	ctx := context.Background()
 	reader, err := c.llmClient.Stream(ctx, content, language)
@@ -221,6 +312,12 @@ func (c *ChatService) streamGenerate(sessionID, content, language string) {
 		}
 		session.Messages = append(session.Messages, errMsg)
 		session.UpdatedAt = time.Now()
+		if c.db != nil {
+			_ = c.db.InsertMessage(sessionID, &storage.MessageRow{
+				SessionID: sessionID, Role: string(RoleAssistant),
+				Content: errMsg.Content, Time: errMsg.Time.Format(time.RFC3339Nano),
+			})
+		}
 		emit("chat-error", map[string]any{
 			"sessionId": sessionID,
 			"content":   errMsg.Content,
@@ -271,6 +368,14 @@ func (c *ChatService) streamGenerate(sessionID, content, language string) {
 	assistantMsg := Message{Role: RoleAssistant, Content: assistantContent, Time: time.Now()}
 	session.Messages = append(session.Messages, assistantMsg)
 	session.UpdatedAt = time.Now()
+
+	if c.db != nil {
+		c.saveSessionMeta(session)
+		_ = c.db.InsertMessage(sessionID, &storage.MessageRow{
+			SessionID: sessionID, Role: string(RoleAssistant),
+			Content: assistantContent, Time: assistantMsg.Time.Format(time.RFC3339Nano),
+		})
+	}
 
 	inputTokens := estimateTokens(content)
 	outputTokens := estimateTokens(assistantContent)

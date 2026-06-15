@@ -4,8 +4,10 @@ import (
 	"embed"
 	"log"
 	"os"
+	"path/filepath"
 
 	"Oj-Agent/llm"
+	"Oj-Agent/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -21,14 +23,24 @@ func main() {
 
 	if llmClient != nil && llmClient.Available() {
 		model := os.Getenv("DEEPSEEK_MODEL")
-		if model == "" { model = os.Getenv("LLM_MODEL") }
-		if model == "" { model = "deepseek-chat" }
+		if model == "" {
+			model = os.Getenv("LLM_MODEL")
+		}
+		if model == "" {
+			model = "deepseek-chat"
+		}
 		log.Printf("LLM: %s ready", model)
 	} else {
 		log.Println("LLM: no API key configured — user will be prompted in UI")
 	}
 
-	chatService := NewChatService(llmClient)
+	dbPath := filepath.Join(os.TempDir(), "oj-agent.db")
+	db, err := storage.Open(dbPath)
+	if err != nil {
+		log.Printf("DB init error: %v (sessions will not be persisted)", err)
+	}
+
+	chatService := NewChatService(llmClient, db)
 
 	app := application.New(application.Options{
 		Name:        "OJ Agent",
@@ -42,6 +54,13 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+	})
+
+	app.OnShutdown(func() {
+		if db != nil {
+			_ = db.Close()
+			log.Println("DB closed")
+		}
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
