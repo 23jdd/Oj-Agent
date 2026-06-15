@@ -15,6 +15,12 @@ const animationData = ref(null)
 const showSettings = ref(false)
 const selectedModel = ref('deepseek-chat')
 const llmStatus = ref('checking')
+const streamStates = reactive({})
+
+function ensureStreamState(sid) {
+  if (!streamStates[sid]) streamStates[sid] = { loading: false, content: '' }
+  return streamStates[sid]
+}
 
 const currentMessages = computed(() => {
   const sid = activeSessionId.value
@@ -59,6 +65,8 @@ provide('animationData', animationData)
 provide('selectedModel', selectedModel)
 provide('llmStatus', llmStatus)
 provide('addMessage', addMessage)
+provide('streamStates', streamStates)
+provide('ensureStreamState', ensureStreamState)
 
 onMounted(async () => {
   try {

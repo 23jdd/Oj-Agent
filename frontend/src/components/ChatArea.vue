@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick, watch, inject, onUpdated, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, inject, onUpdated, onMounted, onUnmounted } from 'vue'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 import { NewSession, SendMessage } from '../../bindings/Oj-Agent/chatservice'
@@ -12,17 +12,26 @@ const emit = defineEmits(['openSettings'])
 const inputText = ref('')
 const selectedModel = inject('selectedModel', ref('deepseek-chat'))
 const selectedLanguage = ref('go')
-const loading = ref(false)
 const chatContainer = ref(null)
 const tokenUsage = inject('tokenUsage')
 const sessions = inject('sessions')
 const activeSessionId = inject('activeSessionId')
 const animationData = inject('animationData')
 const llmStatus = inject('llmStatus', null)
-
-const streamingContent = ref('')
-const currentStreamingId = ref('')
 const addMessage = inject('addMessage')
+const streamStates = inject('streamStates')
+const ensureStreamState = inject('ensureStreamState')
+
+const sessionLoading = computed(() => {
+  if (!props.sessionId) return false
+  const st = streamStates[props.sessionId]
+  return st ? st.loading : false
+})
+const sessionStreaming = computed(() => {
+  if (!props.sessionId) return ''
+  const st = streamStates[props.sessionId]
+  return st ? st.content : ''
+})
 
 const models = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
@@ -43,22 +52,26 @@ let unsubError = null
 
 onMounted(() => {
   unsubChunk = Events.On('chat-chunk', (event) => {
-    streamingContent.value = event.data.content || ''
-    currentStreamingId.value = event.data.sessionId || ''
+    const sid = event.data.sessionId || ''
+    if (sid) ensureStreamState(sid).content = event.data.content || ''
     scrollToBottom()
     handleHighlight()
   })
   unsubComplete = Events.On('chat-complete', (event) => {
     const data = event.data || {}
-    streamingContent.value = ''
-    loading.value = false
-    const sid = data.sessionId || currentStreamingId.value
-    if (sid && addMessage) {
-      addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString() })
+    const sid = data.sessionId || ''
+    if (sid) {
+      const st = streamStates[sid]
+      if (st) {
+        st.content = ''
+        st.loading = false
+      }
+      if (addMessage) {
+        addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString() })
+      }
     }
     if (data.tokenUsage) tokenUsage.value = data.tokenUsage
     if (data.animation && data.animation.elements?.length && data.animation.frames?.length) animationData.value = data.animation
-    currentStreamingId.value = ''
     if (sid && sessions.value) {
       const sil = sessions.value.find(s => s.id === sid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
@@ -67,13 +80,17 @@ onMounted(() => {
     handleHighlight()
   })
   unsubError = Events.On('chat-error', (event) => {
-    streamingContent.value = ''
-    loading.value = false
-    const sid = event.data.sessionId || currentStreamingId.value
-    if (sid && addMessage) {
-      addMessage(sid, { role: 'assistant', content: event.data.content || '发生未知错误。', time: new Date().toISOString() })
+    const sid = event.data.sessionId || ''
+    if (sid) {
+      const st = streamStates[sid]
+      if (st) {
+        st.content = ''
+        st.loading = false
+      }
+      if (addMessage) {
+        addMessage(sid, { role: 'assistant', content: event.data.content || '发生未知错误。', time: new Date().toISOString() })
+      }
     }
-    currentStreamingId.value = ''
     scrollToBottom()
   })
 })
@@ -100,33 +117,43 @@ watch(() => props.messages?.length, () => { scrollToBottom(); handleHighlight() 
 
 const sendMessage = async () => {
   const text = inputText.value.trim()
-  if (!text || loading.value) return
-  loading.value = true; inputText.value = ''; streamingContent.value = ''
+  if (!text || sessionLoading.value) return
+  const sid = props.sessionId || ''
+  if (sid) ensureStreamState(sid)
+  if (sid) streamStates[sid].loading = true
+  if (sid) streamStates[sid].content = ''
+  inputText.value = ''
 
   try {
-    let sid = props.sessionId
-    if (!sid) {
+    let currentSid = props.sessionId
+    if (!currentSid) {
       const session = await NewSession()
-      sid = session.id; activeSessionId.value = sid
-      sessions.value.unshift({ id: sid, title: text.substring(0, 30), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), msgCount: 0 })
+      currentSid = session.id; activeSessionId.value = currentSid
+      sessions.value.unshift({ id: currentSid, title: text.substring(0, 30), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), msgCount: 0 })
+      ensureStreamState(currentSid)
+      streamStates[currentSid].loading = true
+      streamStates[currentSid].content = ''
     }
-    const req = new SendMessageRequest({ sessionId: sid, content: text, model: selectedModel.value, language: selectedLanguage.value })
+    const req = new SendMessageRequest({ sessionId: currentSid, content: text, model: selectedModel.value, language: selectedLanguage.value })
     const response = await SendMessage(req)
     if (!addMessage) return
-    addMessage(sid, { role: 'user', content: response.userMessage.content, time: response.userMessage.time })
+    addMessage(currentSid, { role: 'user', content: response.userMessage.content, time: response.userMessage.time })
     if (response.assistantMessage.content) {
-      addMessage(sid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
+      addMessage(currentSid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time })
       if (response.tokenUsage) tokenUsage.value = response.tokenUsage
       if (response.animation) animationData.value = response.animation
-      loading.value = false
-      const sil = sessions.value.find(s => s.id === sid)
+      if (streamStates[currentSid]) streamStates[currentSid].loading = false
+      const sil = sessions.value.find(s => s.id === currentSid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
     }
-    currentStreamingId.value = sid
   } catch (e) {
     console.error(e); if (!addMessage) return
-    addMessage(sid || currentStreamingId.value || '', { role: 'assistant', content: '发送失败，请重试。', time: new Date().toISOString() })
-    loading.value = false; streamingContent.value = ''
+    const failSid = props.sessionId || ''
+    addMessage(failSid, { role: 'assistant', content: '发送失败，请重试。', time: new Date().toISOString() })
+    if (streamStates[failSid]) {
+      streamStates[failSid].loading = false
+      streamStates[failSid].content = ''
+    }
   } finally { scrollToBottom() }
 }
 
@@ -206,13 +233,13 @@ const renderContent = (content) => {
         </div>
       </div>
 
-      <div v-if="loading" class="message assistant">
+      <div v-if="sessionLoading" class="message assistant">
         <div class="message-avatar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
         </div>
         <div class="message-body">
           <div class="message-role">OJ Agent</div>
-          <div v-if="streamingContent" class="message-text" v-html="renderContent(streamingContent)"></div>
+          <div v-if="sessionStreaming" class="message-text" v-html="renderContent(sessionStreaming)"></div>
           <div v-else class="typing-indicator"><span></span><span></span><span></span></div>
         </div>
       </div>
@@ -222,8 +249,8 @@ const renderContent = (content) => {
 
     <div class="input-area">
       <div class="input-box">
-        <textarea v-model="inputText" @keydown="handleKeydown" placeholder="输入题目描述，Ctrl+Enter 发送..." rows="2" :disabled="loading"></textarea>
-        <button class="send-btn" @click="sendMessage" :disabled="loading || !inputText.trim()">
+        <textarea v-model="inputText" @keydown="handleKeydown" placeholder="输入题目描述，Ctrl+Enter 发送..." rows="2" :disabled="sessionLoading"></textarea>
+        <button class="send-btn" @click="sendMessage" :disabled="sessionLoading || !inputText.trim()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
           </svg>
