@@ -54,12 +54,15 @@ onMounted(() => {
   unsubChunk = Events.On('chat-chunk', (event) => {
     const sid = event.data.sessionId || ''
     if (sid) ensureStreamState(sid).content = event.data.content || ''
-    scrollToBottom()
-    handleHighlight()
+    if (sid === props.sessionId) {
+      scrollToBottom()
+      handleHighlight()
+    }
   })
   unsubComplete = Events.On('chat-complete', (event) => {
     const data = event.data || {}
     const sid = data.sessionId || ''
+    const isCurrent = sid === props.sessionId
     if (sid) {
       const st = streamStates[sid]
       if (st) {
@@ -71,16 +74,19 @@ onMounted(() => {
       }
     }
     if (data.tokenUsage) tokenUsage.value = data.tokenUsage
-    if (data.animation && data.animation.elements?.length && data.animation.frames?.length) animationData.value = data.animation
+    if (data.animation && isCurrent && data.animation.elements?.length && data.animation.frames?.length) animationData.value = data.animation
     if (sid && sessions.value) {
       const sil = sessions.value.find(s => s.id === sid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
     }
-    scrollToBottom()
-    handleHighlight()
+    if (isCurrent) {
+      scrollToBottom()
+      handleHighlight()
+    }
   })
   unsubError = Events.On('chat-error', (event) => {
     const sid = event.data.sessionId || ''
+    const isCurrent = sid === props.sessionId
     if (sid) {
       const st = streamStates[sid]
       if (st) {
@@ -91,7 +97,7 @@ onMounted(() => {
         addMessage(sid, { role: 'assistant', content: event.data.content || '发生未知错误。', time: new Date().toISOString() })
       }
     }
-    scrollToBottom()
+    if (isCurrent) scrollToBottom()
   })
 })
 
@@ -101,7 +107,22 @@ onUnmounted(() => {
   if (unsubError) unsubError()
 })
 
+const isNearBottom = () => {
+  if (!chatContainer.value) return true
+  const el = chatContainer.value
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 120
+}
+
 const scrollToBottom = () => {
+  nextTick(() => {
+    if (!chatContainer.value) return
+    if (isNearBottom()) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+    }
+  })
+}
+
+const forceScrollToBottom = () => {
   nextTick(() => { if (chatContainer.value) chatContainer.value.scrollTop = chatContainer.value.scrollHeight })
 }
 
@@ -154,7 +175,7 @@ const sendMessage = async () => {
       streamStates[failSid].loading = false
       streamStates[failSid].content = ''
     }
-  } finally { scrollToBottom() }
+  } finally { forceScrollToBottom() }
 }
 
 const handleKeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage() } }
