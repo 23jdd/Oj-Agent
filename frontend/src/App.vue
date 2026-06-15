@@ -15,6 +15,17 @@ const animationData = ref(null)
 const showSettings = ref(false)
 const selectedModel = ref('deepseek-chat')
 const llmStatus = ref('checking')
+
+function loadConfig() {
+  try {
+    const saved = localStorage.getItem('oj-agent-config')
+    if (saved) {
+      const cfg = JSON.parse(saved)
+      if (cfg.model) selectedModel.value = cfg.model
+    }
+  } catch (e) {}
+}
+loadConfig()
 const streamStates = reactive({})
 
 function ensureStreamState(sid) {

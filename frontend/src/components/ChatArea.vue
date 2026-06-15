@@ -33,7 +33,21 @@ const sessionStreaming = computed(() => {
   return st ? st.content : ''
 })
 
-const models = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
+const defaultModels = ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'qwen-max', 'claude-3.5-sonnet']
+
+const modelOptions = computed(() => {
+  const list = [...defaultModels]
+  const cur = selectedModel.value
+  if (cur && !list.includes(cur)) list.unshift(cur)
+  try {
+    const saved = localStorage.getItem('oj-agent-config')
+    if (saved) {
+      const cfg = JSON.parse(saved)
+      if (cfg.model && !list.includes(cfg.model)) list.unshift(cfg.model)
+    }
+  } catch (e) {}
+  return list
+})
 const languages = ['go', 'python', 'java', 'cpp', 'javascript', 'rust']
 const hints = [
   { label: '两数之和', text: '两数之和，用哈希表实现 O(n)' },
@@ -208,9 +222,7 @@ const renderContent = (content) => {
   <div class="chat-area">
     <div class="toolbar">
       <div class="toolbar-left">
-        <select v-model="selectedModel" class="tool-select">
-          <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
-        </select>
+        <span class="model-badge">{{ selectedModel }}</span>
         <select v-model="selectedLanguage" class="tool-select">
           <option v-for="l in languages" :key="l" :value="l">{{ l }}</option>
         </select>
@@ -300,6 +312,13 @@ const renderContent = (content) => {
   gap: 12px; z-index: 10;
 }
 .toolbar-left { display: flex; align-items: center; gap: 8px; }
+.model-badge {
+  padding: 5px 10px; background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.25);
+  border-radius: var(--radius-sm); color: var(--accent);
+  font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+  white-space: nowrap; letter-spacing: 0.3px;
+}
 .tool-select {
   padding: 6px 10px; background: var(--bg-main); border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px;
