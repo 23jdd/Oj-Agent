@@ -88,21 +88,27 @@ type UnifiedAnim struct {
 }
 
 type Element struct {
-	ID      string  `json:"id"`
-	Kind    string  `json:"kind"`
-	X       float64 `json:"x"`
-	Y       float64 `json:"y"`
-	W       float64 `json:"w,omitempty"`
-	H       float64 `json:"h,omitempty"`
-	R       float64 `json:"r,omitempty"`
-	X2      float64 `json:"x2,omitempty"`
-	Y2      float64 `json:"y2,omitempty"`
-	Text    string  `json:"text,omitempty"`
-	Style   string  `json:"style,omitempty"`
-	RX      float64 `json:"rx,omitempty"`
-	Visible bool    `json:"visible"`
-	Points  string  `json:"points,omitempty"`
-	Arrow   bool    `json:"arrow,omitempty"`
+	ID       string  `json:"id"`
+	Kind     string  `json:"kind"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	W        float64 `json:"w,omitempty"`
+	H        float64 `json:"h,omitempty"`
+	R        float64 `json:"r,omitempty"`
+	X2       float64 `json:"x2,omitempty"`
+	Y2       float64 `json:"y2,omitempty"`
+	Text     string  `json:"text,omitempty"`
+	Style    string  `json:"style,omitempty"`
+	RX       float64 `json:"rx,omitempty"`
+	Visible  bool    `json:"visible"`
+	Points   string  `json:"points,omitempty"`
+	Arrow    bool    `json:"arrow,omitempty"`
+	ShowGrid bool    `json:"showGrid,omitempty"`
+	D        string  `json:"d,omitempty"`
+	FontSize float64 `json:"fontSize,omitempty"`
+	Opacity  float64 `json:"opacity,omitempty"`
+	Badge    bool    `json:"badge,omitempty"`
+	Dir      string  `json:"dir,omitempty"`
 }
 
 type Frame struct {

@@ -31,6 +31,11 @@ function initState() {
       points: el.points ?? '',
       arrow: el.arrow ?? false,
       showGrid: el.showGrid ?? false,
+      d: el.d ?? '',
+      fontSize: el.fontSize ?? 0,
+      opacity: el.opacity ?? 1,
+      badge: el.badge ?? false,
+      dir: el.dir ?? '',
     }
   })
 }
@@ -54,6 +59,11 @@ function applyFrame(stepIdx) {
     if (changes.points !== undefined) state[id].points = changes.points
     if (changes.w !== undefined) state[id].w = changes.w
     if (changes.showGrid !== undefined) state[id].showGrid = changes.showGrid
+    if (changes.d !== undefined) state[id].d = changes.d
+    if (changes.fontSize !== undefined) state[id].fontSize = changes.fontSize
+    if (changes.opacity !== undefined) state[id].opacity = changes.opacity
+    if (changes.badge !== undefined) state[id].badge = changes.badge
+    if (changes.dir !== undefined) state[id].dir = changes.dir
   }
 }
 
@@ -241,15 +251,77 @@ const gridDefs = computed(() => [...props.elements.filter(e => e.showGrid)])
 
     <!-- Labels -->
     <g v-for="el in elements" :key="'label-'+el.id">
-      <text
-        v-if="state[el.id]?.kind === 'label' && state[el.id]?.visible && state[el.id]?.text"
+      <g v-if="state[el.id]?.kind === 'label' && state[el.id]?.visible && state[el.id]?.text">
+        <rect
+          v-if="state[el.id]?.badge"
+          :x="state[el.id].x - 6"
+          :y="state[el.id].y - 4"
+          width="12" height="8"
+          rx="3"
+          :fill="state[el.id].style === 'dim' ? 'rgba(30,41,59,0.6)' : 'rgba(59,130,246,0.15)'"
+          style="transition: all 0.3s ease"
+        />
+        <text
+          :x="state[el.id].x"
+          :y="state[el.id].y"
+          text-anchor="middle"
+          :fill="state[el.id].style === 'dim' ? '#64748b' : '#94a3b8'"
+          :font-size="state[el.id].fontSize || 12"
+          style="transition: all 0.3s ease"
+        >{{ state[el.id].text }}</text>
+      </g>
+    </g>
+
+    <!-- Polygons (pointers, markers, triangles) -->
+    <g v-for="el in elements" :key="'polygon-'+el.id">
+      <polygon
+        v-if="state[el.id]?.kind === 'polygon' && state[el.id]?.visible && state[el.id]?.points"
+        :points="state[el.id].points"
+        :fill="fillColor(state[el.id].style)"
+        :stroke="strokeColor(state[el.id].style)"
+        :stroke-width="1.5"
+        :opacity="state[el.id].opacity || 1"
+        style="transition: all 0.3s ease"
+      />
+    </g>
+
+    <!-- Paths (curves, bezier connections) -->
+    <g v-for="el in elements" :key="'path-'+el.id">
+      <g v-if="state[el.id]?.kind === 'path' && state[el.id]?.visible && state[el.id]?.d">
+        <path
+          :d="state[el.id].d"
+          :stroke="lineColor(state[el.id].style)"
+          :stroke-width="lineWidth(state[el.id].style)"
+          :stroke-dasharray="lineDash(state[el.id].style)"
+          fill="none"
+          stroke-linecap="round"
+          style="transition: all 0.3s ease"
+        />
+        <polygon
+          v-if="state[el.id]?.arrow"
+          :points="arrowPoints(state[el.id].x2, state[el.id].y2, 8)"
+          :fill="lineColor(state[el.id].style)"
+          style="transition: all 0.3s ease"
+        />
+      </g>
+    </g>
+
+    <!-- Groups (highlight regions, sliding windows) -->
+    <g v-for="el in elements" :key="'group-'+el.id">
+      <rect
+        v-if="state[el.id]?.kind === 'group' && state[el.id]?.visible"
         :x="state[el.id].x"
         :y="state[el.id].y"
-        text-anchor="middle"
-        :fill="state[el.id].style === 'dim' ? '#6b7280' : '#9ca3af'"
-        font-size="12"
+        :width="state[el.id].w"
+        :height="state[el.id].h"
+        :fill="glowColor(state[el.id].style || 'highlight')"
+        :rx="state[el.id].rx || 8"
+        :opacity="state[el.id].opacity || 0.15"
+        :stroke="strokeColor(state[el.id].style || 'highlight')"
+        :stroke-width="1"
+        :stroke-dasharray="state[el.id].style === 'dim' ? '6,4' : 'none'"
         style="transition: all 0.3s ease"
-      >{{ state[el.id].text }}</text>
+      />
     </g>
   </svg>
 </template>
