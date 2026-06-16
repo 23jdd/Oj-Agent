@@ -214,8 +214,7 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	graph.AddBranch(compose.START, compose.NewGraphBranch(
 		func(ctx context.Context, input map[string]any) (string, error) {
-			problem, _ := input["problem"].(string)
-			if isOJProblem(problem) {
+			if isOJ, ok := input["isOJ"].(bool); ok && isOJ {
 				return "oj_template", nil
 			}
 			return "general_template", nil
@@ -254,6 +253,7 @@ func (c *Client) Generate(ctx context.Context, problem string, language string, 
 		"problem":  problem,
 		"language": language,
 		"history":  history,
+		"isOJ":     c.judge(ctx, problem),
 	}
 
 	result, err := c.runnable.Invoke(ctx, input)
@@ -270,8 +270,31 @@ func (c *Client) Stream(ctx context.Context, problem string, language string, hi
 		"problem":  problem,
 		"language": language,
 		"history":  history,
+		"isOJ":     c.judge(ctx, problem),
 	}
 	return c.runnable.Stream(ctx, input)
+}
+
+var judgeSystemPrompt = `你是一个分类器。判断用户输入是否为算法/编程/数据结构题目。
+如果输入包含算法题、编程题、LeetCode风格问题、或需要代码实现的问题，回答 "true"。
+如果输入是普通闲聊、知识问答、或非编程问题，回答 "false"。
+只回答一个单词：true 或 false。`
+
+func (c *Client) judge(ctx context.Context, problem string) bool {
+	msgs := []*schema.Message{
+		schema.SystemMessage(judgeSystemPrompt),
+		schema.UserMessage(problem),
+	}
+
+	result, err := c.model.Generate(ctx, msgs)
+	if err != nil {
+		log.Printf("[LLM] judge error, fallback to keyword: %v", err)
+		return isOJProblem(problem)
+	}
+
+	content := strings.TrimSpace(strings.ToLower(result.Content))
+	log.Printf("[LLM] judge result: %q -> %v", result.Content, strings.Contains(content, "true"))
+	return strings.Contains(content, "true")
 }
 
 func isOJProblem(problem string) bool {
