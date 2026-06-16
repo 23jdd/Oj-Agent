@@ -1,8 +1,21 @@
 <script setup>
-import { ref, watch, onBeforeUnmount, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, onBeforeUnmount, onMounted, onUnmounted, computed, inject } from 'vue'
 import UniversalRenderer from './anim/UniversalRenderer.vue'
 
-const props = defineProps({ animationData: Object })
+const props = defineProps({ animationData: Array })
+
+const activeAnimIdx = inject('activeAnimIdx', ref(0))
+
+const animList = computed(() => {
+  if (!props.animationData || !Array.isArray(props.animationData)) return []
+  return props.animationData
+})
+
+const currentAnim = computed(() => {
+  if (animList.value.length === 0) return null
+  const idx = Math.min(activeAnimIdx.value, animList.value.length - 1)
+  return animList.value[idx] || null
+})
 
 const isPlaying = ref(false)
 const currentStepIndex = ref(-1)
@@ -12,10 +25,10 @@ const speedOptions = [0.5, 1, 1.5, 2, 3]
 const speedIdx = ref(1)
 const speed = computed(() => speedOptions[speedIdx.value])
 
-const steps = computed(() => props.animationData?.frames || [])
-const elements = computed(() => props.animationData?.elements || [])
-const svgW = computed(() => props.animationData?.svgW || 400)
-const svgH = computed(() => props.animationData?.svgH || 250)
+const steps = computed(() => currentAnim.value?.frames || [])
+const elements = computed(() => currentAnim.value?.elements || [])
+const svgW = computed(() => currentAnim.value?.svgW || 400)
+const svgH = computed(() => currentAnim.value?.svgH || 250)
 const maxStep = computed(() => Math.max(0, steps.value.length - 1))
 const stepDuration = computed(() => 2000 / speed.value)
 const progress = computed(() => currentStepIndex.value >= 0 ? ((currentStepIndex.value + 1) / steps.value.length * 100) : 0)
@@ -66,9 +79,18 @@ function cycleSpeed() { speedIdx.value = (speedIdx.value + 1) % speedOptions.len
 function enterFullscreen() { isFullscreen.value = true }
 function exitFullscreen() { isFullscreen.value = false }
 
-watch(() => props.animationData, (data) => {
+function selectAnim(idx) {
+  activeAnimIdx.value = idx
   reset()
-  if (data?.frames?.length) {
+  setTimeout(() => play(), 300)
+}
+
+watch(() => props.animationData, (data) => {
+  if (activeAnimIdx.value >= data?.length) {
+    activeAnimIdx.value = 0
+  }
+  reset()
+  if (data?.length) {
     setTimeout(() => play(), 300)
   }
 })
@@ -103,10 +125,9 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
       </div>
       <div class="controls" v-if="steps.length > 0">
         <button
-          v-if="showSizeHint"
-          class="ctrl-btn ctrl-fs"
+          :class="['ctrl-btn', { 'ctrl-fs': showSizeHint }]"
           @click="enterFullscreen"
-          title="全屏查看 (建议)"
+          :title="showSizeHint ? '全屏查看 (建议)' : '全屏查看'"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m-8 18H5a2 2 0 01-2-2v-3m18 0v3a2 2 0 01-2 2h-3"/>
@@ -133,6 +154,18 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
       </div>
     </div>
 
+    <!-- Animation tabs -->
+    <div v-if="animList.length > 1" class="anim-tabs">
+      <button
+        v-for="(anim, idx) in animList"
+        :key="idx"
+        :class="['anim-tab', { active: idx === activeAnimIdx }]"
+        @click="selectAnim(idx)"
+      >
+        {{ anim.label || ('动画' + (idx+1)) }}
+      </button>
+    </div>
+
     <div class="canvas-container">
       <div v-if="steps.length === 0" class="empty-state">
         <div class="empty-icon">
@@ -140,7 +173,8 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
             <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
           </svg>
         </div>
-        <p>输入题目后<br/>此处展示算法动画</p>
+        <p v-if="animList.length === 0">输入题目后<br/>此处展示算法动画</p>
+        <p v-else>当前动画无帧数据</p>
         <div class="kbd-hints">
           <span><kbd>Space</kbd> 播放</span>
           <span><kbd>← →</kbd> 步进</span>
@@ -185,6 +219,18 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
+
+      <!-- Fullscreen tabs -->
+      <div v-if="animList.length > 1" class="fs-anim-tabs">
+        <button
+          v-for="(anim, idx) in animList"
+          :key="idx"
+          :class="['fs-anim-tab', { active: idx === activeAnimIdx }]"
+          @click="selectAnim(idx)"
+        >
+          {{ anim.label || ('动画' + (idx+1)) }}
+        </button>
+      </div>
 
       <div class="fs-canvas" :style="{ width: fsWidth + 'px', height: fsHeight + 'px' }">
         <UniversalRenderer :elements="elements" :frames="steps" :current-step="currentStepIndex" :svgW="svgW" :svgH="svgH" />
@@ -233,11 +279,20 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
 </template>
 
 <style scoped>
-.animation-panel { display:flex; flex-direction:column; height:100%; background:linear-gradient(180deg, #161b22 0%, #131820 100%); overflow:hidden; }
+.animation-panel {
+  display:flex; flex-direction:column; height:100%;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-left: 1px solid var(--glass-border);
+  overflow:hidden;
+}
 
 .panel-header {
   display:flex; align-items:center; justify-content:space-between;
-  padding:12px 16px; background:rgba(0,0,0,0.12); border-bottom:1px solid var(--border-subtle); flex-shrink:0;
+  padding:12px 16px;
+  background: var(--glass-hover);
+  border-bottom:1px solid var(--glass-border); flex-shrink:0;
 }
 .header-left { display:flex; align-items:center; gap:10px; }
 .header-icon-box {
@@ -250,12 +305,18 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
 
 .controls { display:flex; gap:3px; align-items:center; }
 .ctrl-btn {
-  width:30px; height:30px; border:1px solid var(--border-subtle); border-radius:var(--radius-sm);
-  background:var(--bg-elevated); color:var(--text-secondary); cursor:pointer;
+  width:30px; height:30px;
+  border:1px solid var(--glass-border); border-radius:var(--radius-sm);
+  background: rgba(255,255,255,0.03); color:var(--text-secondary); cursor:pointer;
   display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;
   font-family:var(--font-main);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
-.ctrl-btn:hover:not(:disabled) { background:var(--bg-hover); color:var(--text-primary); border-color:#484f58; transform:translateY(-1px); }
+.ctrl-btn:hover:not(:disabled) {
+  background: var(--glass-hover); color:var(--text-primary);
+  border-color:rgba(255,255,255,0.12); transform:translateY(-1px);
+}
 .ctrl-btn:active:not(:disabled) { transform:scale(0.95); }
 .ctrl-btn:disabled { opacity:0.3; cursor:not-allowed; }
 .ctrl-play { background:rgba(59,130,246,0.15); border-color:rgba(59,130,246,0.25); color:var(--accent); }
@@ -266,7 +327,36 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
 .ctrl-fs:hover { background:rgba(59,130,246,0.18); border-color:rgba(59,130,246,0.4); box-shadow:0 0 8px rgba(59,130,246,0.15); }
 .speed-label { font-variant-numeric:tabular-nums; }
 
-.canvas-container { flex:1; display:flex; align-items:center; justify-content:center; overflow:auto; padding:16px; min-height:0; }
+/* Animation Tabs */
+.anim-tabs {
+  display: flex; gap:2px; padding:6px 12px; overflow-x:auto;
+  background: rgba(255,255,255,0.02);
+  border-bottom:1px solid var(--glass-border); flex-shrink:0;
+}
+.anim-tab {
+  padding:5px 12px; border:1px solid var(--glass-border); border-radius:var(--radius-sm);
+  background: transparent; color:var(--text-muted); font-size:11px; font-weight:500;
+  cursor:pointer; transition:all 0.2s ease; white-space:nowrap; font-family:var(--font-main);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.anim-tab:hover {
+  color:var(--text-secondary);
+  background: var(--glass-hover);
+  border-color: rgba(255,255,255,0.1);
+}
+.anim-tab.active {
+  color:var(--accent);
+  background: rgba(59,130,246,0.12);
+  border-color:rgba(59,130,246,0.35);
+  box-shadow: 0 0 12px rgba(59,130,246,0.1);
+}
+
+.canvas-container {
+  flex:1; min-height:0;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden; padding:12px;
+}
 
 .empty-state { text-align:center; }
 .empty-icon { margin:0 auto 16px; display:flex; align-items:center; justify-content:center; width:72px; height:72px; border-radius:50%; background:rgba(48,54,61,0.3); }
@@ -275,43 +365,64 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
 .kbd-hints { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
 .kbd-hints span { font-size:10px; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
 .kbd-hints kbd {
-  padding:1px 6px; background:var(--bg-elevated); border:1px solid var(--border-subtle);
+  padding:1px 6px; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border);
   border-radius:3px; font-size:10px; font-family:var(--font-mono); color:var(--text-secondary);
 }
 
-.renderer-area { display:flex; flex-direction:column; align-items:center; gap:12px; width:100%; }
+.renderer-area {
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  width:100%; max-height:100%; overflow:hidden;
+}
 .renderer-frame {
-  width:100%; background:var(--bg-panel); border-radius:var(--radius-lg);
-  padding:8px; border:1px solid var(--border-subtle);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.2), 0 0 0 1px rgba(59,130,246,0.03);
+  display:flex; align-items:center; justify-content:center;
+  width:100%; max-height:100%; overflow:hidden;
+  background: rgba(15,20,25,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius:var(--radius-lg);
+  padding:8px;
+  border:1px solid var(--glass-border);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.02);
 }
 
 .size-hint {
-  display:flex; align-items:center; gap:8px;
-  font-size:11px; color:#fbbf24; background:rgba(245,158,11,0.08);
-  border:1px solid rgba(245,158,11,0.15); border-radius:var(--radius-sm);
+  display:flex; align-items:center; gap:8px; flex-shrink:0;
+  font-size:11px; color:#fbbf24;
+  background: rgba(245,158,11,0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border:1px solid rgba(245,158,11,0.2); border-radius:var(--radius-sm);
   padding:8px 14px;
 }
 .size-hint a { color:var(--accent); text-decoration:none; font-weight:600; }
 .size-hint a:hover { text-decoration:underline; }
 
 .step-desc {
-  text-align:center; font-size:13px; color:var(--text-secondary); line-height:1.5;
-  padding:10px 16px; background:var(--bg-elevated); border-radius:var(--radius-md);
-  border:1px solid var(--border-subtle); max-width:95%;
+  text-align:center; font-size:13px; color:var(--text-secondary); line-height:1.5; flex-shrink:0;
+  padding:8px 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius:var(--radius-md);
+  border:1px solid var(--glass-border);
+  max-width:95%;
 }
 .step-num {
   font-size:11px; color:var(--accent); margin-right:8px; font-weight:700;
   background:rgba(59,130,246,0.1); padding:2px 8px; border-radius:10px;
 }
 
-.progress-bar-wrap { flex-shrink:0; padding:10px 16px 14px; border-top:1px solid var(--border-subtle); }
-.progress-track { height:3px; background:var(--bg-elevated); border-radius:2px; overflow:hidden; margin-bottom:10px; }
+.progress-bar-wrap {
+  flex-shrink:0; padding:10px 16px 14px;
+  border-top:1px solid var(--glass-border);
+  background: var(--glass-hover);
+}
+.progress-track { height:3px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden; margin-bottom:10px; }
 .progress-bar { height:100%; background:linear-gradient(90deg, var(--accent), #60a5fa); border-radius:2px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); box-shadow:0 0 6px rgba(59,130,246,0.3); }
 
 .step-dots { display:flex; justify-content:center; gap:6px; }
-.dot { width:7px; height:7px; border-radius:50%; background:#30363d; cursor:pointer; transition:all 0.3s cubic-bezier(0.4,0,0.2,1); }
-.dot:hover { background:#484f58; transform:scale(1.3); }
+.dot { width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,0.07); cursor:pointer; transition:all 0.3s cubic-bezier(0.4,0,0.2,1); }
+.dot:hover { background:rgba(255,255,255,0.15); transform:scale(1.3); }
 .dot.done { background:#1e40af; }
 .dot.active { background:var(--accent); box-shadow:0 0 10px rgba(59,130,246,0.7); transform:scale(1.5); }
 
@@ -336,6 +447,23 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
   transition:all 0.2s ease;
 }
 .fs-close:hover { background:rgba(255,255,255,0.1); color:#f3f4f6; border-color:rgba(255,255,255,0.2); }
+
+/* FS Tabs */
+.fs-anim-tabs {
+  display:flex; gap:4px; padding:4px 16px;
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+  border-radius:var(--radius-md);
+}
+.fs-anim-tab {
+  padding:6px 16px; border:1px solid rgba(255,255,255,0.06); border-radius:var(--radius-sm);
+  background:transparent; color:var(--text-muted); font-size:12px; font-weight:500;
+  cursor:pointer; transition:all 0.2s ease; white-space:nowrap; font-family:var(--font-main);
+}
+.fs-anim-tab:hover { color:#f3f4f6; background:rgba(255,255,255,0.04); }
+.fs-anim-tab.active {
+  color:var(--accent); background:rgba(59,130,246,0.15);
+  border-color:rgba(59,130,246,0.4);
+}
 
 .fs-canvas {
   background:var(--bg-panel); border-radius:var(--radius-lg);
@@ -383,4 +511,15 @@ onBeforeUnmount(() => { if (animationTimer) clearTimeout(animationTimer) })
 .fs-progress-track { height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; margin-bottom:10px; }
 .fs-progress-bar { height:100%; background:linear-gradient(90deg, var(--accent), #60a5fa); border-radius:2px; transition:width 0.4s cubic-bezier(0.4,0,0.2,1); box-shadow:0 0 8px rgba(59,130,246,0.4); }
 .fs-step-dots { display:flex; justify-content:center; gap:8px; }
+
+@media (max-width: 480px) {
+  .canvas-container { padding: 6px; }
+  .renderer-frame { padding: 4px; }
+  .step-desc { font-size: 11px; padding: 6px 10px; }
+  .panel-header { padding: 8px 10px; }
+  .controls { gap: 1px; }
+  .ctrl-btn { width: 26px; height: 26px; }
+  .anim-tabs { padding: 4px 6px; }
+  .anim-tab { padding: 3px 8px; font-size: 10px; }
+}
 </style>

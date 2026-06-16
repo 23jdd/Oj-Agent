@@ -37,10 +37,10 @@ const (
 )
 
 type Message struct {
-	Role      Role        `json:"role"`
-	Content   string      `json:"content"`
-	Time      time.Time   `json:"time"`
-	Animation UnifiedAnim `json:"animation,omitempty"`
+	Role       Role          `json:"role"`
+	Content    string        `json:"content"`
+	Time       time.Time     `json:"time"`
+	Animations []UnifiedAnim `json:"animations,omitempty"`
 }
 
 type ChatSession struct {
@@ -59,11 +59,11 @@ type SendMessageRequest struct {
 }
 
 type SendMessageResponse struct {
-	UserMessage      Message     `json:"userMessage"`
-	AssistantMessage Message     `json:"assistantMessage"`
-	SessionID        string      `json:"sessionId"`
-	TokenUsage       TokenUsage  `json:"tokenUsage"`
-	Animation        UnifiedAnim `json:"animation"`
+	UserMessage      Message       `json:"userMessage"`
+	AssistantMessage Message       `json:"assistantMessage"`
+	SessionID        string        `json:"sessionId"`
+	TokenUsage       TokenUsage    `json:"tokenUsage"`
+	Animations       []UnifiedAnim `json:"animations"`
 }
 
 type TokenUsage struct {
@@ -80,6 +80,7 @@ type SessionInfo struct {
 }
 
 type UnifiedAnim struct {
+	Label     string    `json:"label,omitempty"`
 	Elements  []Element `json:"elements"`
 	Frames    []Frame   `json:"frames"`
 	SVGWidth  float64   `json:"svgW"`
@@ -162,9 +163,8 @@ func (c *ChatService) loadFromDB() {
 				Time:    t,
 			}
 			if mr.Animation != "" {
-				if a, ok := parseAnimJSON(mr.Animation); ok {
-					msg.Animation = a
-				}
+				anims := parseAnimsJSON(mr.Animation)
+				msg.Animations = anims
 			}
 			session.Messages = append(session.Messages, msg)
 		}
@@ -368,11 +368,40 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 		assistantContent = accumulated
 	}
 
-	var anim UnifiedAnim
-	if parsed.HasAnim {
-		if a, ok := parseAnimJSON(parsed.AnimJSON); ok {
-			anim = a
+	var anims []UnifiedAnim
+	for i, aj := range parsed.AnimJSONs {
+		if a, ok := parseAnimJSON(aj); ok {
+			if i < len(parsed.AnimLabel) {
+				a.Label = parsed.AnimLabel[i]
+			}
+			anims = append(anims, a)
 		}
+	}
+
+	needRetry := len(anims) == 0
+	if !needRetry {
+		if violations := checkAnimsBounds(anims); len(violations) > 0 {
+			log.Printf("[streamGenerate] bounds violations in first response: %v", violations)
+			needRetry = true
+			anims = nil
+		}
+	}
+
+	if needRetry && assistantContent != "" && c.llmClient != nil && c.llmClient.Available() {
+		log.Printf("[streamGenerate] retrying (max %d rounds)...", llm.MaxRetryRounds)
+		retryContent, retryBlocks, retryErr := c.llmClient.GenerateWithRetry(ctx, content, language, history)
+		if retryErr != nil {
+			log.Printf("[streamGenerate] retry failed: %v", retryErr)
+		}
+		for _, block := range retryBlocks {
+			if a, ok := parseAnimJSON(block.JSON); ok {
+				if block.Label != "" {
+					a.Label = block.Label
+				}
+				anims = append(anims, a)
+			}
+		}
+		_ = retryContent
 	}
 
 	c.mu.Lock()
@@ -382,15 +411,15 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 		return
 	}
 
-	assistantMsg := Message{Role: RoleAssistant, Content: assistantContent, Time: time.Now(), Animation: anim}
+	assistantMsg := Message{Role: RoleAssistant, Content: assistantContent, Time: time.Now(), Animations: anims}
 	session.Messages = append(session.Messages, assistantMsg)
 	session.UpdatedAt = time.Now()
 
 	if c.db != nil {
 		c.saveSessionMeta(session)
 		var animationJSON string
-		if anim.Elements != nil && anim.Frames != nil {
-			if b, err := json.Marshal(anim); err == nil {
+		if len(anims) > 0 {
+			if b, err := json.Marshal(anims); err == nil {
 				animationJSON = string(b)
 			}
 		}
@@ -413,7 +442,7 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 		"content":    assistantContent,
 		"time":       assistantMsg.Time,
 		"tokenUsage": tokenUsage,
-		"animation":  anim,
+		"animations": anims,
 	})
 }
 
@@ -434,6 +463,111 @@ func parseAnimJSON(raw string) (UnifiedAnim, bool) {
 		return anim, false
 	}
 	return anim, true
+}
+
+func parseAnimsJSON(raw string) []UnifiedAnim {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if raw[0] == '[' {
+		var anims []UnifiedAnim
+		if err := json.Unmarshal([]byte(raw), &anims); err != nil {
+			return nil
+		}
+		result := make([]UnifiedAnim, 0, len(anims))
+		for _, a := range anims {
+			if len(a.Elements) > 0 && len(a.Frames) > 0 {
+				result = append(result, a)
+			}
+		}
+		return result
+	}
+	var single UnifiedAnim
+	if err := json.Unmarshal([]byte(raw), &single); err != nil {
+		return nil
+	}
+	if len(single.Elements) > 0 && len(single.Frames) > 0 {
+		return []UnifiedAnim{single}
+	}
+	return nil
+}
+
+func validateAnimBounds(anim UnifiedAnim) []string {
+	const margin = 8.0
+	w, h := anim.SVGWidth, anim.SVGHeight
+	if w <= 0 || h <= 0 {
+		return []string{fmt.Sprintf("svgW=%.0f svgH=%.0f 无效", w, h)}
+	}
+	var violations []string
+	for _, e := range anim.Elements {
+		switch e.Kind {
+		case "rect":
+			if e.X < margin {
+				violations = append(violations, fmt.Sprintf("%s x=%.0f 太靠左", e.ID, e.X))
+			}
+			if e.Y < margin {
+				violations = append(violations, fmt.Sprintf("%s y=%.0f 太靠上", e.ID, e.Y))
+			}
+			if e.W > 0 && e.X+e.W > w-margin {
+				violations = append(violations, fmt.Sprintf("%s 超出右边 svgW=%.0f", e.ID, w))
+			}
+			if e.H > 0 && e.Y+e.H > h-margin {
+				violations = append(violations, fmt.Sprintf("%s 超出下边 svgH=%.0f", e.ID, h))
+			}
+		case "circle":
+			r := e.R
+			if r <= 0 {
+				r = 22
+			}
+			if e.X-r < margin {
+				violations = append(violations, fmt.Sprintf("%s 圆超出左边", e.ID))
+			}
+			if e.X+r > w-margin {
+				violations = append(violations, fmt.Sprintf("%s 圆超出右边 svgW=%.0f", e.ID, w))
+			}
+			if e.Y-r < margin {
+				violations = append(violations, fmt.Sprintf("%s 圆超出上边", e.ID))
+			}
+			if e.Y+r > h-margin {
+				violations = append(violations, fmt.Sprintf("%s 圆超出下边 svgH=%.0f", e.ID, h))
+			}
+		case "line":
+			if e.X < -margin || e.X > w+margin {
+				violations = append(violations, fmt.Sprintf("%s x1=%.0f 越界", e.ID, e.X))
+			}
+			if e.X2 < -margin || e.X2 > w+margin {
+				violations = append(violations, fmt.Sprintf("%s x2=%.0f 越界", e.ID, e.X2))
+			}
+			if e.Y < -margin || e.Y > h+margin {
+				violations = append(violations, fmt.Sprintf("%s y1=%.0f 越界", e.ID, e.Y))
+			}
+			if e.Y2 < -margin || e.Y2 > h+margin {
+				violations = append(violations, fmt.Sprintf("%s y2=%.0f 越界", e.ID, e.Y2))
+			}
+		case "label":
+			if e.X < -margin || e.X > w+margin {
+				violations = append(violations, fmt.Sprintf("%s x=%.0f 越界 svgW=%.0f", e.ID, e.X, w))
+			}
+			if e.Y < -margin || e.Y > h+margin {
+				violations = append(violations, fmt.Sprintf("%s y=%.0f 越界 svgH=%.0f", e.ID, e.Y, h))
+			}
+		}
+	}
+	if len(violations) > 5 {
+		violations = append(violations[:5], fmt.Sprintf("...还有%d处越界", len(violations)-5))
+	}
+	return violations
+}
+
+func checkAnimsBounds(anims []UnifiedAnim) []string {
+	var all []string
+	for i, a := range anims {
+		for _, v := range validateAnimBounds(a) {
+			all = append(all, fmt.Sprintf("[动画%d]%s", i+1, v))
+		}
+	}
+	return all
 }
 
 func (c *ChatService) GetTokenUsage() TokenUsage {

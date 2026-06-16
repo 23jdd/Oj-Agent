@@ -12,6 +12,7 @@ const sessions = ref([])
 const tokenUsage = ref({ sessionTokens: 0, totalTokens: 0 })
 const allMessages = reactive({})
 const animationData = ref(null)
+const activeAnimIdx = ref(0)
 const showSettings = ref(false)
 const selectedModel = ref('deepseek-chat')
 const llmStatus = ref('checking')
@@ -73,6 +74,7 @@ provide('sessions', sessions)
 provide('tokenUsage', tokenUsage)
 provide('messages', currentMessages)
 provide('animationData', animationData)
+provide('activeAnimIdx', activeAnimIdx)
 provide('selectedModel', selectedModel)
 provide('llmStatus', llmStatus)
 provide('addMessage', addMessage)
@@ -129,8 +131,8 @@ onMounted(async () => {
   width: 100vw; height: 100vh;
   background: var(--bg-deepest);
   background-image:
-    radial-gradient(circle at 20% 30%, rgba(59,130,246,0.03) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(139,92,246,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 20% 30%, rgba(59,130,246,0.04) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(139,92,246,0.04) 0%, transparent 50%),
     radial-gradient(circle at 50% 50%, rgba(59,130,246,0.02) 0%, transparent 70%);
 }
 
@@ -142,14 +144,16 @@ onMounted(async () => {
 }
 
 .app-layout > :nth-child(1) {
-  border-right: 1px solid rgba(42,48,60,0.6);
-  box-shadow: 3px 0 20px rgba(0,0,0,0.2);
+  box-shadow: 4px 0 24px rgba(0,0,0,0.15);
   z-index: 2;
 }
 
+.app-layout > :nth-child(2) {
+  background: var(--bg-main);
+}
+
 .app-layout > :nth-child(3) {
-  border-left: 1px solid rgba(42,48,60,0.6);
-  box-shadow: -3px 0 20px rgba(0,0,0,0.2);
+  box-shadow: -4px 0 24px rgba(0,0,0,0.15);
   z-index: 2;
 }
 

@@ -258,7 +258,9 @@ const gridDefs = computed(() => [...props.elements.filter(e => e.showGrid)])
 .universal-renderer {
   display: block;
   margin: 0 auto;
-  overflow: visible;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .glow-pulse {

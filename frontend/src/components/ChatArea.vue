@@ -17,6 +17,7 @@ const tokenUsage = inject('tokenUsage')
 const sessions = inject('sessions')
 const activeSessionId = inject('activeSessionId')
 const animationData = inject('animationData')
+const activeAnimIdx = inject('activeAnimIdx')
 const llmStatus = inject('llmStatus', null)
 const addMessage = inject('addMessage')
 const streamStates = inject('streamStates')
@@ -62,7 +63,8 @@ onMounted(() => {
     const data = event.data || {}
     const sid = data.sessionId || ''
     const isCurrent = sid === props.sessionId
-    const hasAnim = data.animation && data.animation.elements?.length && data.animation.frames?.length
+    const anims = data.animations || []
+    const hasAnim = anims.length > 0
     if (sid) {
       const st = streamStates[sid]
       if (st) {
@@ -70,11 +72,11 @@ onMounted(() => {
         st.loading = false
       }
       if (addMessage) {
-        addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString(), animation: hasAnim ? data.animation : undefined })
+        addMessage(sid, { role: 'assistant', content: data.content || '', time: data.time || new Date().toISOString(), animations: hasAnim ? anims : undefined })
       }
     }
     if (data.tokenUsage) tokenUsage.value = data.tokenUsage
-    if (hasAnim && isCurrent) animationData.value = data.animation
+    if (hasAnim && isCurrent) { animationData.value = anims; activeAnimIdx.value = 0 }
     if (sid && sessions.value) {
       const sil = sessions.value.find(s => s.id === sid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
@@ -160,10 +162,11 @@ const sendMessage = async () => {
     if (!addMessage) return
     addMessage(currentSid, { role: 'user', content: response.userMessage.content, time: response.userMessage.time })
     if (response.assistantMessage.content) {
-      const hasAnim = response.animation && response.animation.elements?.length
-      addMessage(currentSid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time, animation: hasAnim ? response.animation : undefined })
+      const anims = response.animations || []
+      const hasAnim = anims.length > 0
+      addMessage(currentSid, { role: 'assistant', content: response.assistantMessage.content, time: response.assistantMessage.time, animations: hasAnim ? anims : undefined })
       if (response.tokenUsage) tokenUsage.value = response.tokenUsage
-      if (hasAnim) animationData.value = response.animation
+      if (hasAnim) { animationData.value = anims; activeAnimIdx.value = 0 }
       if (streamStates[currentSid]) streamStates[currentSid].loading = false
       const sil = sessions.value.find(s => s.id === currentSid)
       if (sil) { sil.updatedAt = new Date().toISOString(); sil.msgCount = (sil.msgCount || 0) + 2 }
@@ -251,8 +254,11 @@ const renderContent = (content) => {
           <div v-if="msg.role === 'user'" class="message-text">{{ msg.content }}</div>
           <div v-else class="message-text" v-html="renderContent(msg.content)"></div>
         </div>
-        <div v-if="msg.animation && msg.animation.elements?.length" class="anim-badge" @click="animationData = msg.animation" title="查看动画">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+        <div v-if="msg.animations && msg.animations.length > 0" class="anim-badges">
+          <div v-for="(anim, ai) in msg.animations" :key="ai" class="anim-badge" @click="animationData = msg.animations; activeAnimIdx = ai" :title="anim.label || ('动画' + (ai+1))">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+            <span class="anim-badge-label">{{ anim.label || ('动画' + (ai+1)) }}</span>
+          </div>
         </div>
       </div>
 
@@ -290,35 +296,48 @@ const renderContent = (content) => {
 .toolbar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 18px;
-  background: rgba(22, 27, 34, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(42, 48, 60, 0.6);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--glass-border);
   gap: 12px; z-index: 10;
 }
 .toolbar-left { display: flex; align-items: center; gap: 8px; }
 .model-badge {
-  padding: 5px 10px; background: rgba(59,130,246,0.1);
-  border: 1px solid rgba(59,130,246,0.25);
+  padding: 5px 10px;
+  background: rgba(59,130,246,0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(59,130,246,0.2);
   border-radius: var(--radius-sm); color: var(--accent);
   font-size: 11px; font-weight: 600; font-family: var(--font-mono);
   white-space: nowrap; letter-spacing: 0.3px;
 }
 .tool-select {
-  padding: 6px 10px; background: var(--bg-main); border: 1px solid var(--border-subtle);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px;
   font-family: inherit; outline: none; cursor: pointer; transition: all var(--transition-fast);
 }
-.tool-select:hover { border-color: #484f58; }
+.tool-select:hover { border-color: rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); }
 .tool-select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-.tool-hint { font-size: 10px; color: var(--text-muted); background: var(--bg-main); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border-subtle); letter-spacing: 0.5px; }
+.tool-hint {
+  font-size: 10px; color: var(--text-muted);
+  background: rgba(255,255,255,0.02); padding: 3px 8px;
+  border-radius: 4px; border: 1px solid var(--glass-border); letter-spacing: 0.5px;
+}
 .settings-btn {
-  width: 32px; height: 32px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
-  background: var(--bg-main); color: var(--text-muted); cursor: pointer;
+  width: 32px; height: 32px;
+  border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.02); color: var(--text-muted); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: all var(--transition-fast);
 }
-.settings-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: #484f58; }
+.settings-btn:hover {
+  background: var(--glass-hover); color: var(--text-primary);
+  border-color: rgba(255,255,255,0.12);
+}
 
 /* ---- Message List ---- */
 .message-list { flex: 1; overflow-y: auto; padding: 24px 28px 8px; }
@@ -348,22 +367,29 @@ const renderContent = (content) => {
 .welcome p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.7; position: relative; }
 .mock-notice {
   display: flex; align-items: center; gap: 8px; margin-bottom: 24px; position: relative;
-  padding: 10px 18px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25);
+  padding: 10px 18px;
+  background: rgba(245,158,11,0.06);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(245,158,11,0.2);
   border-radius: var(--radius-md); font-size: 12px; color: #f59e0b; cursor: pointer;
   transition: all var(--transition-fast);
 }
-.mock-notice:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); }
+.mock-notice:hover { background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.35); }
 .hints { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 480px; position: relative; }
 .hint-tag {
-  padding: 9px 18px; background: rgba(28,33,41,0.8); border: 1px solid var(--border-subtle);
+  padding: 9px 18px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
   border-radius: 24px; font-size: 13px; font-weight: 500; color: var(--text-secondary);
   cursor: pointer; transition: all var(--transition-smooth);
-  backdrop-filter: blur(4px);
 }
 .hint-tag:hover {
   background: rgba(59,130,246,0.12); color: var(--accent);
-  border-color: rgba(59,130,246,0.4); transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59,130,246,0.15);
+  border-color: rgba(59,130,246,0.35); transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(59,130,246,0.15);
 }
 
 /* ---- Message Bubbles ---- */
@@ -393,28 +419,42 @@ const renderContent = (content) => {
   box-shadow: 0 2px 8px rgba(59,130,246,0.2);
 }
 .message.assistant .message-text {
-  background: var(--bg-elevated); color: var(--text-primary);
-  border: 1px solid var(--border-subtle); border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  border-bottom-left-radius: 4px;
+  box-shadow: var(--glass-shadow);
 }
 
 /* ---- Animation Badge ---- */
-.anim-badge {
+.anim-badges {
   align-self: center; flex-shrink: 0;
-  width: 30px; height: 30px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%;
-  background: rgba(59,130,246,0.12);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.anim-badge {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border-radius: 12px;
+  background: rgba(59,130,246,0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(59,130,246,0.15);
   color: var(--accent);
   cursor: pointer;
-  opacity: 0.55;
+  opacity: 0.6;
   transition: all 0.25s ease;
+  white-space: nowrap;
 }
 .anim-badge:hover {
   opacity: 1;
-  background: rgba(59,130,246,0.25);
-  transform: scale(1.15);
-  box-shadow: 0 0 12px rgba(59,130,246,0.35);
+  background: rgba(59,130,246,0.2);
+  border-color: rgba(59,130,246,0.35);
+  transform: scale(1.05);
+  box-shadow: 0 0 16px rgba(59,130,246,0.2);
+}
+.anim-badge-label {
+  font-size: 10px; font-weight: 500;
 }
 
 /* ---- Markdown Content ---- */
@@ -451,22 +491,43 @@ const renderContent = (content) => {
 .message-text :deep(.li-num) { color: var(--accent); font-weight: 600; margin-right: 4px; }
 
 /* ---- Typing Indicator ---- */
-.typing-indicator { display: flex; gap: 5px; padding: 14px 16px; background: var(--bg-elevated); border-radius: var(--radius-md); border-bottom-left-radius: 4px; border: 1px solid var(--border-subtle); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.typing-indicator {
+  display: flex; gap: 5px; padding: 14px 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--radius-md);
+  border-bottom-left-radius: 4px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
 .typing-indicator span { width: 7px; height: 7px; background: var(--text-muted); border-radius: 50%; animation: typing 1.4s infinite both; }
 .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
 .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes typing { 0%,60%,100% { transform:translateY(0); opacity:0.4; } 30% { transform:translateY(-8px); opacity:1; } }
 
 /* ---- Input Area ---- */
-.input-area { padding: 12px 18px 14px; background: rgba(22,27,34,0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid rgba(42,48,60,0.6); }
+.input-area {
+  padding: 12px 18px 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-top: 1px solid var(--glass-border);
+}
 .input-box { display: flex; gap: 10px; align-items: flex-end; }
 .input-box textarea {
-  flex: 1; padding: 11px 14px; background: var(--bg-main); border: 1px solid var(--border-subtle);
+  flex: 1; padding: 11px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; font-family: inherit;
   resize: none; outline: none; min-height: 48px; max-height: 120px;
   transition: all var(--transition-fast);
 }
-.input-box textarea:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+.input-box textarea:focus {
+  border-color: var(--border-focus);
+  background: rgba(59,130,246,0.04);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1), 0 0 20px rgba(59,130,246,0.06);
+}
 .input-box textarea::placeholder { color: var(--text-muted); }
 .send-btn {
   width: 48px; height: 48px;

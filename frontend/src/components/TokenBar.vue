@@ -39,9 +39,11 @@ const formatTokens = (val) => {
 <style scoped>
 .token-bar {
   display: flex; align-items: center; gap: 2px; padding: 0 18px; height: 44px;
-  background: rgba(22, 27, 34, 0.9); backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  font-size: 12px; border-top: 1px solid rgba(42,48,60,0.5);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  font-size: 12px;
+  border-top: 1px solid var(--glass-border);
 }
 .token-item { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
 .token-label { color: var(--text-secondary); font-weight: 600; font-size: 12px; }

@@ -141,7 +141,9 @@ const clearConfig = async () => {
 <style scoped>
 .settings-overlay {
   position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   animation: fadeIn 0.2s ease;
 }
@@ -149,15 +151,21 @@ const clearConfig = async () => {
 
 .settings-modal {
   width: 480px; max-width: 90vw;
-  background: var(--bg-panel); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow), 0 0 0 1px rgba(255,255,255,0.04);
   animation: slideUp 0.25s cubic-bezier(0.4,0,0.2,1);
 }
 @keyframes slideUp { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
 
 .modal-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 22px; border-bottom: 1px solid var(--border-subtle);
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-hover);
 }
 .modal-title { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .modal-title svg { color: var(--accent); }
@@ -174,11 +182,17 @@ const clearConfig = async () => {
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.3px; text-transform: uppercase; }
 .field-input {
-  padding: 10px 14px; background: var(--bg-main); border: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px;
-  font-family: var(--font-main); outline: none; transition: border-color var(--transition-fast);
+  font-family: var(--font-main); outline: none; transition: all var(--transition-fast);
 }
-.field-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.field-input:focus {
+  border-color: var(--border-focus);
+  background: rgba(59,130,246,0.04);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
 .field-input::placeholder { color: var(--text-muted); }
 .field-input.mono { font-family: var(--font-mono); font-size: 13px; }
 

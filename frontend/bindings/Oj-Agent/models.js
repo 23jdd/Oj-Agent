@@ -262,12 +262,12 @@ export class Message {
              */
             this["time"] = null;
         }
-        if (!("animation" in $$source)) {
+        if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {UnifiedAnim | undefined}
+             * @type {UnifiedAnim[] | undefined}
              */
-            this["animation"] = undefined;
+            this["animations"] = undefined;
         }
 
         Object.assign(this, $$source);
@@ -281,8 +281,8 @@ export class Message {
     static createFrom($$source = {}) {
         const $$createField3_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("animation" in $$parsedSource && $$parsedSource["animation"]) {
-            $$parsedSource["animation"] = $$createField3_0($$parsedSource["animation"]);
+        if ("animations" in $$parsedSource) {
+            $$parsedSource["animations"] = $$createField3_0($$parsedSource["animations"]);
         }
         return new Message(/** @type {Partial<Message>} */($$parsedSource));
     }
@@ -385,12 +385,12 @@ export class SendMessageResponse {
              */
             this["tokenUsage"] = (new TokenUsage());
         }
-        if (!("animation" in $$source)) {
+        if (!("animations" in $$source)) {
             /**
              * @member
-             * @type {UnifiedAnim}
+             * @type {UnifiedAnim[]}
              */
-            this["animation"] = (new UnifiedAnim());
+            this["animations"] = [];
         }
 
         Object.assign(this, $$source);
@@ -404,7 +404,7 @@ export class SendMessageResponse {
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType0;
         const $$createField1_0 = $$createType0;
-        const $$createField3_0 = $$createType3;
+        const $$createField3_0 = $$createType5;
         const $$createField4_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("userMessage" in $$parsedSource) {
@@ -416,8 +416,8 @@ export class SendMessageResponse {
         if ("tokenUsage" in $$parsedSource) {
             $$parsedSource["tokenUsage"] = $$createField3_0($$parsedSource["tokenUsage"]);
         }
-        if ("animation" in $$parsedSource) {
-            $$parsedSource["animation"] = $$createField4_0($$parsedSource["animation"]);
+        if ("animations" in $$parsedSource) {
+            $$parsedSource["animations"] = $$createField4_0($$parsedSource["animations"]);
         }
         return new SendMessageResponse(/** @type {Partial<SendMessageResponse>} */($$parsedSource));
     }
@@ -520,6 +520,13 @@ export class UnifiedAnim {
      * @param {Partial<UnifiedAnim>} [$$source = {}] - The source object to create the UnifiedAnim.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["label"] = undefined;
+        }
         if (!("elements" in $$source)) {
             /**
              * @member
@@ -558,14 +565,14 @@ export class UnifiedAnim {
      * @returns {UnifiedAnim}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType6;
-        const $$createField1_0 = $$createType8;
+        const $$createField1_0 = $$createType7;
+        const $$createField2_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("elements" in $$parsedSource) {
-            $$parsedSource["elements"] = $$createField0_0($$parsedSource["elements"]);
+            $$parsedSource["elements"] = $$createField1_0($$parsedSource["elements"]);
         }
         if ("frames" in $$parsedSource) {
-            $$parsedSource["frames"] = $$createField1_0($$parsedSource["frames"]);
+            $$parsedSource["frames"] = $$createField2_0($$parsedSource["frames"]);
         }
         return new UnifiedAnim(/** @type {Partial<UnifiedAnim>} */($$parsedSource));
     }
@@ -575,9 +582,10 @@ export class UnifiedAnim {
 const $$createType0 = Message.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Map($Create.Any, $Create.Any);
-const $$createType3 = TokenUsage.createFrom;
-const $$createType4 = UnifiedAnim.createFrom;
-const $$createType5 = Element.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = Frame.createFrom;
-const $$createType8 = $Create.Array($$createType7);
+const $$createType3 = UnifiedAnim.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = TokenUsage.createFrom;
+const $$createType6 = Element.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = Frame.createFrom;
+const $$createType9 = $Create.Array($$createType8);
