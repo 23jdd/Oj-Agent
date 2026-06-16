@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"Oj-Agent/llm"
+	"Oj-Agent/memory"
 	"Oj-Agent/storage"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -282,10 +283,12 @@ func (c *ChatService) SendMessage(req SendMessageRequest) SendMessageResponse {
 		}
 	}
 
+	historyMsgs := make([]Message, len(session.Messages)-1)
+	copy(historyMsgs, session.Messages)
 	sessionID := session.ID
 	c.mu.Unlock()
 
-	go c.streamGenerate(sessionID, req.Content, req.Language)
+	go c.streamGenerate(sessionID, req.Content, req.Language, historyMsgs)
 
 	assistantMsg := Message{Role: RoleAssistant, Content: "", Time: time.Now()}
 	return SendMessageResponse{
@@ -302,9 +305,16 @@ func (c *ChatService) saveSessionMeta(s *ChatSession) {
 	_ = c.db.UpdateSession(s.ID, s.Title, s.UpdatedAt.Format(time.RFC3339Nano))
 }
 
-func (c *ChatService) streamGenerate(sessionID, content, language string) {
+func (c *ChatService) streamGenerate(sessionID, content, language string, historyMsgs []Message) {
 	ctx := context.Background()
-	reader, err := c.llmClient.Stream(ctx, content, language)
+
+	entries := make([]memory.HistoryEntry, 0, len(historyMsgs))
+	for _, m := range historyMsgs {
+		entries = append(entries, memory.HistoryEntry{Role: string(m.Role), Content: m.Content})
+	}
+	history := memory.BuildHistory(entries, 0)
+
+	reader, err := c.llmClient.Stream(ctx, content, language, history)
 	if err != nil {
 		c.mu.Lock()
 		defer c.mu.Unlock()

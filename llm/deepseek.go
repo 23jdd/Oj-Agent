@@ -194,7 +194,7 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	ojTemplate := prompt.FromMessages(schema.GoTemplate,
 		schema.SystemMessage(ojSystemPrompt),
-		schema.UserMessage("题目: {{.problem}}\n语言: {{.language}}"),
+		schema.UserMessage("题目: {{.problem}}\n语言: {{.language}}{{if .history}}\n\n## 对话历史\n{{.history}}{{end}}"),
 	)
 	if err := graph.AddChatTemplateNode("oj_template", ojTemplate); err != nil {
 		return nil, err
@@ -202,7 +202,7 @@ func NewClient(cfg *Config) (*Client, error) {
 
 	generalTemplate := prompt.FromMessages(schema.GoTemplate,
 		schema.SystemMessage(generalSystemPrompt),
-		schema.UserMessage("{{.problem}}"),
+		schema.UserMessage("{{if .history}}## 对话历史\n{{.history}}\n\n{{end}}{{.problem}}"),
 	)
 	if err := graph.AddChatTemplateNode("general_template", generalTemplate); err != nil {
 		return nil, err
@@ -249,10 +249,11 @@ func (c *Client) Model() string {
 	return ""
 }
 
-func (c *Client) Generate(ctx context.Context, problem string, language string, rules string) (string, error) {
+func (c *Client) Generate(ctx context.Context, problem string, language string, history string) (string, error) {
 	input := map[string]any{
 		"problem":  problem,
 		"language": language,
+		"history":  history,
 	}
 
 	result, err := c.runnable.Invoke(ctx, input)
@@ -264,10 +265,11 @@ func (c *Client) Generate(ctx context.Context, problem string, language string, 
 	return result.Content, nil
 }
 
-func (c *Client) Stream(ctx context.Context, problem string, language string) (*schema.StreamReader[*schema.Message], error) {
+func (c *Client) Stream(ctx context.Context, problem string, language string, history string) (*schema.StreamReader[*schema.Message], error) {
 	input := map[string]any{
 		"problem":  problem,
 		"language": language,
+		"history":  history,
 	}
 	return c.runnable.Stream(ctx, input)
 }
