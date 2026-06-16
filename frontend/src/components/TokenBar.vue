@@ -38,23 +38,23 @@ const formatTokens = (val) => {
 
 <style scoped>
 .token-bar {
-  display: flex; align-items: center; gap: 2px; padding: 0 18px; height: 44px;
+  display: flex; align-items: center; gap: 4px; padding: 0 20px; height: 44px;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   font-size: 12px;
   border-top: 1px solid var(--glass-border);
 }
-.token-item { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-.token-label { color: var(--text-secondary); font-weight: 600; font-size: 12px; }
-.token-value { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
-.token-suffix { color: var(--text-muted); font-size: 10px; font-weight: 400; }
-.token-icon { color: var(--text-muted); flex-shrink: 0; }
-.divider { width: 1px; height: 16px; background: #2a303c; margin: 0 16px; }
+.token-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.token-label { color: var(--text-dim); font-weight: 500; font-size: 11px; }
+.token-value { color: var(--text-secondary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.token-suffix { color: var(--text-dim); font-size: 10px; font-weight: 400; }
+.token-icon { color: var(--text-dim); flex-shrink: 0; }
+.divider { width: 1px; height: 16px; background: var(--glass-border); margin: 0 10px; }
 .flex-spacer { flex: 1; }
-.version { color: var(--text-muted); font-size: 10px; opacity: 0.5; letter-spacing: 0.5px; }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.dot.online { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.5); animation: dotPulse 2s ease-in-out infinite; }
-.dot.offline { background: #6b7280; }
-@keyframes dotPulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+.version { color: var(--text-dim); font-size: 10px; opacity: 0.6; letter-spacing: 0.5px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot.online { background: var(--success); box-shadow: 0 0 6px var(--success-glow); }
+.dot.offline { background: var(--text-dim); }
+@keyframes dotPulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
 </style>

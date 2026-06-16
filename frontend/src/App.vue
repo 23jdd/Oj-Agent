@@ -130,10 +130,17 @@ onMounted(async () => {
 .app-shell {
   width: 100vw; height: 100vh;
   background: var(--bg-deepest);
-  background-image:
-    radial-gradient(circle at 20% 30%, rgba(59,130,246,0.04) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(139,92,246,0.04) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(59,130,246,0.02) 0%, transparent 70%);
+  position: relative;
+}
+
+.app-shell::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 30%, rgba(59,130,246,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 70% at 85% 70%, rgba(139,92,246,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(59,130,246,0.02) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
 }
 
 .app-layout {
@@ -141,24 +148,10 @@ onMounted(async () => {
   grid-template-columns: 260px 1fr 420px;
   grid-template-rows: 1fr 44px;
   height: 100vh; width: 100vw;
-}
-
-.app-layout > :nth-child(1) {
-  box-shadow: 4px 0 24px rgba(0,0,0,0.15);
-  z-index: 2;
+  position: relative; z-index: 1;
 }
 
 .app-layout > :nth-child(2) {
   background: var(--bg-main);
-}
-
-.app-layout > :nth-child(3) {
-  box-shadow: -4px 0 24px rgba(0,0,0,0.15);
-  z-index: 2;
-}
-
-.app-layout > :nth-child(4) {
-  grid-column: 1 / -1;
-  z-index: 3;
 }
 </style>

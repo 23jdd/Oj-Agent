@@ -71,7 +71,7 @@ function fillColor(style) {
     case 'result': return '#10b981'
     case 'pivot': return '#8b5cf6'
     case 'dim': return '#1e293b'
-    default: return '#374151'
+    default: return '#1e293b'
   }
 }
 
@@ -92,12 +92,12 @@ function strokeColor(style) {
   if (style === 'compare') return '#fbbf24'
   if (style === 'pivot') return '#a78bfa'
   if (style === 'result') return '#34d399'
-  return '#4b5563'
+  return '#475569'
 }
 
 function textColor(style) {
-  if (style === 'dim') return '#6b7280'
-  return '#f3f4f6'
+  if (style === 'dim') return '#64748b'
+  return '#eef2ff'
 }
 
 function hasGlow(style) {
@@ -137,7 +137,7 @@ const gridDefs = computed(() => [...props.elements.filter(e => e.showGrid)])
       </filter>
     </defs>
 
-    <rect :width="svgW" :height="svgH" fill="#0f1419" />
+    <rect :width="svgW" :height="svgH" fill="#0c1119" />
 
     <!-- Grid backgrounds for DP tables -->
     <g v-for="el in elements.filter(e => e.showGrid)" :key="'gridbg-'+el.id">

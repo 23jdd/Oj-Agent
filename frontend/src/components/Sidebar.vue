@@ -53,19 +53,19 @@ const formatTime = (t) => {
   <div class="sidebar">
     <div class="sidebar-brand">
       <div class="brand-icon">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5">
           <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
         </svg>
       </div>
       <div class="brand-info">
         <span class="brand-text">OJ Agent</span>
-        <span class="brand-sub">算法可视化</span>
+        <span class="brand-sub">Algorithm Visualizer</span>
       </div>
     </div>
 
     <div class="sidebar-header">
       <button class="new-chat-btn" @click="newSession">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
         新建对话
@@ -94,14 +94,17 @@ const formatTime = (t) => {
           </svg>
         </button>
       </div>
-      <div v-if="(filteredSessions()).length === 0 && !loading" class="empty-hint">暂无对话，点击上方开始</div>
+      <div v-if="(filteredSessions()).length === 0 && !loading" class="empty-hint">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.3">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        <span>暂无对话</span>
+      </div>
     </div>
 
     <div class="sidebar-footer">
       <div class="footer-item">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-        </svg>
+        <div class="footer-dot"></div>
         <span>暗色模式</span>
       </div>
     </div>
@@ -110,7 +113,7 @@ const formatTime = (t) => {
 
 <style scoped>
 .sidebar {
-  display: flex; flex-direction: column; height: 100%;
+  display:flex; flex-direction:column; height:100%;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -119,57 +122,64 @@ const formatTime = (t) => {
 }
 
 .sidebar-brand {
-  display: flex; align-items: center; gap: 10px; padding: 18px 16px 14px;
+  display:flex; align-items:center; gap:12px;
+  padding: 20px 18px 16px;
   border-bottom: 1px solid var(--glass-border);
-  background: var(--glass-hover);
 }
 .brand-icon {
-  width: 36px; height: 36px;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-violet) 100%);
-  border-radius: 10px; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 10px rgba(59,130,246,0.4), 0 0 20px rgba(59,130,246,0.15);
+  width: 38px; height: 38px;
+  background: var(--gradient-brand);
+  border-radius: var(--radius-sm);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow: 0 4px 16px rgba(59,130,246,0.3);
 }
-.brand-info { display: flex; flex-direction: column; gap: 1px; }
-.brand-text { font-size: 15px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.3px; }
-.brand-sub { font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
+.brand-info { display:flex; flex-direction:column; gap:1px; }
+.brand-text { font-size:16px; font-weight:700; color:var(--text-primary); letter-spacing:-0.4px; }
+.brand-sub { font-size:10px; color:var(--text-dim); letter-spacing:0.5px; text-transform:uppercase; }
 
-.sidebar-header { padding: 12px 14px; }
+.sidebar-header { padding: 14px 16px 8px; }
 .new-chat-btn {
-  width: 100%; padding: 10px 16px;
-  background: linear-gradient(135deg, var(--accent) 0%, #2563eb 100%);
-  color: #fff; border: none; border-radius: var(--radius-md);
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2), 0 0 0 0 rgba(59,130,246,0.4);
+  width:100%; padding: 10px 16px;
+  background: var(--gradient-brand);
+  color:#fff; border:none; border-radius: var(--radius-sm);
+  font-size:13px; font-weight:600; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  transition: all var(--transition-smooth);
+  box-shadow: 0 2px 8px rgba(59,130,246,0.25);
 }
-.new-chat-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(59,130,246,0.35), 0 2px 6px rgba(0,0,0,0.2); }
-.new-chat-btn:active { transform: translateY(0) scale(0.98); }
+.new-chat-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59,130,246,0.35);
+}
+.new-chat-btn:active { transform: scale(0.97); }
 
-.search-box { position: relative; padding: 0 14px 10px; }
-.search-icon { position: absolute; left: 24px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.search-box { position:relative; padding: 0 16px 12px; }
+.search-icon {
+  position:absolute; left:24px; top:50%; transform:translateY(-50%);
+  color:var(--text-dim); pointer-events:none; z-index:1;
+}
 .search-input {
-  width: 100%; padding: 8px 12px 8px 32px;
-  background: rgba(255,255,255,0.03);
+  width:100%; padding: 9px 12px 9px 34px;
+  background: var(--glass-hover);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  color: var(--text-primary); font-size: 12px; outline: none; font-family: inherit;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary); font-size:12px; outline:none;
   transition: all var(--transition-fast);
 }
 .search-input:focus {
-  border-color: var(--border-focus);
-  background: rgba(59,130,246,0.06);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+  border-color: rgba(59,130,246,0.3);
+  background: rgba(59,130,246,0.04);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
 }
-.search-input::placeholder { color: var(--text-muted); }
+.search-input::placeholder { color: var(--text-dim); }
 
-.session-list { flex: 1; overflow-y: auto; padding: 4px 10px; }
+.session-list { flex:1; overflow-y:auto; padding: 6px 16px; }
 
 .session-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  border-radius: var(--radius-md); cursor: pointer;
-  transition: all var(--transition-fast); margin-bottom: 2px; position: relative;
-  background: transparent;
+  display:flex; align-items:center; gap:10px;
+  padding: 10px 16px; margin-bottom: 2px;
+  border-radius: var(--radius-sm); cursor:pointer;
+  transition: all var(--transition-fast);
   border: 1px solid transparent;
 }
 .session-item:hover {
@@ -177,41 +187,55 @@ const formatTime = (t) => {
   border-color: var(--glass-border);
 }
 .session-item.active {
-  background: rgba(59,130,246,0.1);
-  border: 1px solid rgba(59,130,246,0.25);
-  box-shadow: 0 0 16px rgba(59,130,246,0.08), inset 0 1px 0 rgba(255,255,255,0.03);
+  background: rgba(59,130,246,0.08);
+  border-color: rgba(59,130,246,0.2);
+  box-shadow: 0 0 20px rgba(59,130,246,0.06);
 }
 
 .session-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0;
+  width:7px; height:7px; border-radius:50%;
+  background: var(--text-dim); flex-shrink:0;
   transition: all var(--transition-fast);
 }
-.session-item.active .session-dot { background: var(--accent); box-shadow: 0 0 6px rgba(59,130,246,0.6); }
-
-.session-info { flex: 1; min-width: 0; }
-.session-title {
-  display: block; font-size: 13px; font-weight: 500; color: var(--text-primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;
+.session-item.active .session-dot {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(59,130,246,0.5);
 }
-.session-item.active .session-title { color: #fff; font-weight: 600; }
-.session-meta { font-size: 11px; color: var(--text-muted); }
+
+.session-info { flex:1; min-width:0; }
+.session-title {
+  display:block; font-size:13px; font-weight:500; color:var(--text-secondary);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:2px;
+  transition: color var(--transition-fast);
+}
+.session-item.active .session-title { color: var(--text-primary); font-weight:600; }
+.session-meta { font-size:11px; color:var(--text-dim); }
 
 .delete-btn {
-  width: 28px; height: 28px; border: none; background: transparent;
-  color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: all 0.2s ease; flex-shrink: 0;
+  width:28px; height:28px; border:none; background:transparent;
+  color:var(--text-dim); cursor:pointer; border-radius:var(--radius-sm);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transition: all 0.2s ease; flex-shrink:0;
 }
-.session-item:hover .delete-btn { opacity: 1; }
-.delete-btn:hover { background: rgba(239,68,68,0.15); color: #f87171; }
+.session-item:hover .delete-btn { opacity:1; }
+.delete-btn:hover { background: rgba(239,68,68,0.12); color: var(--danger); }
+.delete-btn:active { transform: scale(0.9); }
 
-.empty-hint { text-align: center; color: var(--text-muted); font-size: 12px; padding: 48px 16px; line-height: 1.5; }
+.empty-hint {
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+  text-align:center; color:var(--text-dim); font-size:12px;
+  padding: 56px 16px;
+}
 
 .sidebar-footer {
-  padding: 12px 16px;
+  padding: 12px 18px;
   border-top: 1px solid var(--glass-border);
-  background: var(--glass-hover);
 }
-.footer-item { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; opacity: 0.6; transition: opacity var(--transition-fast); }
-.footer-item:hover { opacity: 1; }
+.footer-item {
+  display:flex; align-items:center; gap:10px;
+  color:var(--text-dim); font-size:12px; opacity:0.7;
+  transition: opacity var(--transition-fast);
+}
+.footer-item:hover { opacity:1; }
+.footer-dot { width:7px; height:7px; border-radius:50%; background: var(--text-dim); }
 </style>
