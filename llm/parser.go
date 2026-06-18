@@ -165,6 +165,7 @@ func extractLabel(line string) string {
 		"动画标签：", "动画标签:", "标签：", "标签:",
 		"条件：", "条件:", "示例：", "示例:", "例子：", "例子:",
 		"分支：", "分支:", "场景：", "场景:",
+		"用例：", "用例:", "用例", "case：", "case:", "Case：", "Case:",
 	}
 	for _, p := range prefixes {
 		if strings.HasPrefix(line, p) {
