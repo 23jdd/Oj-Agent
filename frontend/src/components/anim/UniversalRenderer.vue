@@ -48,7 +48,12 @@ function applyFrame(stepIdx) {
   const frame = props.frames[stepIdx]
   if (!frame?.delta) return
   for (const [id, changes] of Object.entries(frame.delta)) {
-    if (!state[id]) continue
+    if (!state[id]) {
+      if (typeof window !== 'undefined') {
+        console.warn('[UniversalRenderer] delta 引用了未知元素:', id, '（该元素不存在于 elements 中）')
+      }
+      continue
+    }
     if (changes.x !== undefined) state[id].x = changes.x
     if (changes.y !== undefined) state[id].y = changes.y
     if (changes.x2 !== undefined) state[id].x2 = changes.x2
@@ -58,12 +63,15 @@ function applyFrame(stepIdx) {
     if (changes.visible !== undefined) state[id].visible = changes.visible
     if (changes.points !== undefined) state[id].points = changes.points
     if (changes.w !== undefined) state[id].w = changes.w
+    if (changes.h !== undefined) state[id].h = changes.h
     if (changes.showGrid !== undefined) state[id].showGrid = changes.showGrid
     if (changes.d !== undefined) state[id].d = changes.d
     if (changes.fontSize !== undefined) state[id].fontSize = changes.fontSize
     if (changes.opacity !== undefined) state[id].opacity = changes.opacity
     if (changes.badge !== undefined) state[id].badge = changes.badge
     if (changes.dir !== undefined) state[id].dir = changes.dir
+    if (changes.rx !== undefined) state[id].rx = changes.rx
+    if (changes.r !== undefined) state[id].r = changes.r
   }
 }
 

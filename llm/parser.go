@@ -2,6 +2,7 @@ package llm
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 )
 
@@ -174,15 +175,96 @@ func extractLabel(line string) string {
 	return line
 }
 
+var trailingCommaRE = regexp.MustCompile(`,(\s*[}\]])`)
+
+func RepairJSON(raw string) string {
+	return repairJSON(raw)
+}
+
+func repairJSON(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+
+	// 去掉尾逗号: ,} 或 ,] 或 ,\n}
+	raw = trailingCommaRE.ReplaceAllString(raw, "$1")
+
+	// 补齐缺失的闭合括号
+	depth := 0
+	inString := false
+	escaped := false
+	for _, c := range raw {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if c == '\\' && inString {
+			escaped = true
+			continue
+		}
+		if c == '"' {
+			inString = !inString
+			continue
+		}
+		if inString {
+			continue
+		}
+		if c == '{' || c == '[' {
+			depth++
+		} else if c == '}' || c == ']' {
+			depth--
+		}
+	}
+
+	if depth > 0 {
+		// 检查最后一个完整结构是对象还是数组
+		bracketCount := 0
+		lastStruct := byte('{')
+		for i := len(raw) - 1; i >= 0; i-- {
+			if raw[i] == '}' {
+				bracketCount++
+			} else if raw[i] == '{' {
+				bracketCount--
+			} else if raw[i] == ']' {
+				bracketCount++
+			} else if raw[i] == '[' {
+				bracketCount--
+			}
+			if bracketCount < 0 && raw[i] == '{' {
+				lastStruct = '{'
+				break
+			}
+			if bracketCount < 0 && raw[i] == '[' {
+				lastStruct = '['
+				break
+			}
+		}
+
+		closing := ""
+		for i := 0; i < depth; i++ {
+			if lastStruct == '{' {
+				closing += "}"
+			} else {
+				closing += "]"
+			}
+		}
+		raw += closing
+	}
+
+	return raw
+}
+
 func isValidAnimJSON(raw string) bool {
 	if raw == "" {
 		return false
 	}
+	repaired := repairJSON(raw)
 	var test map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &test); err != nil {
+	if err := json.Unmarshal([]byte(repaired), &test); err != nil {
 		// try as array of anim objects
 		var arr []map[string]interface{}
-		if err2 := json.Unmarshal([]byte(raw), &arr); err2 != nil {
+		if err2 := json.Unmarshal([]byte(repaired), &arr); err2 != nil {
 			return false
 		}
 		if len(arr) > 0 {

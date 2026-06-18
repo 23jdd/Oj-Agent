@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"Oj-Agent/llm"
@@ -117,11 +118,12 @@ type Frame struct {
 }
 
 type ChatService struct {
-	mu          sync.Mutex
-	sessions    map[string]*ChatSession
-	totalTokens int
-	llmClient   *llm.Client
-	db          *storage.DB
+	mu             sync.Mutex
+	sessions       map[string]*ChatSession
+	totalTokens    atomic.Int64
+	pendingTokens  atomic.Int64
+	llmClient      *llm.Client
+	db             *storage.DB
 }
 
 func NewChatService(llmClient *llm.Client, db *storage.DB) *ChatService {
@@ -129,6 +131,11 @@ func NewChatService(llmClient *llm.Client, db *storage.DB) *ChatService {
 		sessions:  make(map[string]*ChatSession),
 		llmClient: llmClient,
 		db:        db,
+	}
+	if llmClient != nil {
+		llmClient.SetTokenCallback(func(usage llm.TokenUsage) {
+			cs.pendingTokens.Add(int64(usage.TotalTokens))
+		})
 	}
 	cs.loadFromDB()
 	return cs
@@ -362,9 +369,11 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 			return
 		}
 		accumulated += msg.Content
+		// 流式输出时过滤掉 ---ANIM--- 和后续的动画 JSON，避免在聊天区显示原始 JSON
+		filtered := filterAnimBlocks(accumulated)
 		emit("chat-chunk", map[string]any{
 			"sessionId": sessionID,
-			"content":   accumulated,
+			"content":   filtered,
 		})
 	}
 
@@ -380,6 +389,7 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 			if i < len(parsed.AnimLabel) {
 				a.Label = parsed.AnimLabel[i]
 			}
+			autoFitAnim(&a)
 			anims = append(anims, a)
 		}
 	}
@@ -404,6 +414,7 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 				if block.Label != "" {
 					a.Label = block.Label
 				}
+				autoFitAnim(&a)
 				anims = append(anims, a)
 			}
 		}
@@ -436,11 +447,12 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 		})
 	}
 
-	inputTokens := estimateTokens(content)
-	outputTokens := estimateTokens(assistantContent)
-	sessionTokens := inputTokens + outputTokens
-	c.totalTokens += sessionTokens
-	tokenUsage := TokenUsage{SessionTokens: sessionTokens, TotalTokens: c.totalTokens}
+	sessionTokens := int(c.pendingTokens.Swap(0))
+	if sessionTokens == 0 {
+		sessionTokens = estimateTokens(content) + estimateTokens(assistantContent)
+	}
+	newTotal := c.totalTokens.Add(int64(sessionTokens))
+	tokenUsage := TokenUsage{SessionTokens: sessionTokens, TotalTokens: int(newTotal)}
 	c.mu.Unlock()
 
 	emit("chat-complete", map[string]any{
@@ -461,14 +473,156 @@ func emit(eventName string, data any) {
 }
 
 func parseAnimJSON(raw string) (UnifiedAnim, bool) {
+	repaired := llm.RepairJSON(raw)
 	var anim UnifiedAnim
-	if err := json.Unmarshal([]byte(raw), &anim); err != nil {
+	if err := json.Unmarshal([]byte(repaired), &anim); err != nil {
 		return anim, false
 	}
 	if len(anim.Elements) == 0 || len(anim.Frames) == 0 {
 		return anim, false
 	}
+	// 校验 delta 引用的 ID 是否存在
+	elementIDs := make(map[string]bool)
+	for _, e := range anim.Elements {
+		elementIDs[e.ID] = true
+	}
+	for _, f := range anim.Frames {
+		for id := range f.Delta {
+			if !elementIDs[id] {
+				log.Printf("[parseAnimJSON] delta references unknown element %q", id)
+				return anim, false
+			}
+		}
+	}
 	return anim, true
+}
+
+func autoFitAnim(anim *UnifiedAnim) {
+	if len(anim.Elements) == 0 {
+		return
+	}
+	const margin = 12.0
+	const padding = 32.0
+
+	minX, minY := 1e9, 1e9
+	maxX, maxY := -1e9, -1e9
+
+	for _, e := range anim.Elements {
+		ex, ey, ew, eh := e.X, e.Y, 0.0, 0.0
+		switch e.Kind {
+		case "rect":
+			ew, eh = e.W, e.H
+		case "circle":
+			r := e.R
+			if r <= 0 {
+				r = 22
+			}
+			ex, ey = e.X-r, e.Y-r
+			ew, eh = r*2, r*2
+		case "line":
+			ex = min2(e.X, e.X2)
+			ey = min2(e.Y, e.Y2)
+			ew = abs(e.X2-e.X) + 2
+			eh = abs(e.Y2-e.Y) + 2
+		case "path":
+			ex = e.X
+			ey = e.Y
+			ew, eh = 2, 2
+		}
+		if ex < minX {
+			minX = ex
+		}
+		if ey < minY {
+			minY = ey
+		}
+		if ex+ew > maxX {
+			maxX = ex + ew
+		}
+		if ey+eh > maxY {
+			maxY = ey + eh
+		}
+	}
+
+	shiftX := 0.0
+	shiftY := 0.0
+	if minX < margin {
+		shiftX = margin - minX
+	}
+	if minY < margin {
+		shiftY = margin - minY
+	}
+
+	neededW := maxX + shiftX + padding
+	neededH := maxY + shiftY + padding
+
+	if neededW > anim.SVGWidth {
+		anim.SVGWidth = clampSize(neededW, 220, 900)
+	}
+	if neededH > anim.SVGHeight {
+		anim.SVGHeight = clampSize(neededH, 100, 700)
+	}
+
+	if shiftX == 0 && shiftY == 0 {
+		return
+	}
+
+	for i := range anim.Elements {
+		anim.Elements[i].X += shiftX
+		anim.Elements[i].Y += shiftY
+		if anim.Elements[i].Kind == "line" || anim.Elements[i].Kind == "path" {
+			anim.Elements[i].X2 += shiftX
+			anim.Elements[i].Y2 += shiftY
+		}
+	}
+
+	for fi := range anim.Frames {
+		d := anim.Frames[fi].Delta
+		if d == nil {
+			continue
+		}
+		for _, changes := range d {
+			ch, ok := changes.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if v, ok := ch["x"].(float64); ok {
+				ch["x"] = v + shiftX
+			}
+			if v, ok := ch["y"].(float64); ok {
+				ch["y"] = v + shiftY
+			}
+			if v, ok := ch["x2"].(float64); ok {
+				ch["x2"] = v + shiftX
+			}
+			if v, ok := ch["y2"].(float64); ok {
+				ch["y2"] = v + shiftY
+			}
+		}
+	}
+}
+
+func min2(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func clampSize(v, minV, maxV float64) float64 {
+	if v < minV {
+		return minV
+	}
+	if v > maxV {
+		return maxV
+	}
+	return v
 }
 
 func parseAnimsJSON(raw string) []UnifiedAnim {
@@ -577,9 +731,7 @@ func checkAnimsBounds(anims []UnifiedAnim) []string {
 }
 
 func (c *ChatService) GetTokenUsage() TokenUsage {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return TokenUsage{TotalTokens: c.totalTokens}
+	return TokenUsage{TotalTokens: int(c.totalTokens.Load())}
 }
 
 func (c *ChatService) UpdateLLMConfig(apiKey, baseURL, model string) string {
@@ -632,6 +784,15 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "..."
+}
+
+func filterAnimBlocks(raw string) string {
+	const sep = "---ANIM---"
+	idx := strings.Index(raw, sep)
+	if idx == -1 {
+		return raw
+	}
+	return strings.TrimSpace(raw[:idx])
 }
 
 var _ = strings.TrimSpace
