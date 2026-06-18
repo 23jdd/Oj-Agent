@@ -384,6 +384,7 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 	}
 
 	var anims []UnifiedAnim
+	needsAnimation := strings.Contains(accumulated, "---ANIM---")
 	for i, aj := range parsed.AnimJSONs {
 		if a, ok := parseAnimJSON(aj); ok {
 			if i < len(parsed.AnimLabel) {
@@ -394,7 +395,7 @@ func (c *ChatService) streamGenerate(sessionID, content, language string, histor
 		}
 	}
 
-	needRetry := len(anims) == 0
+	needRetry := needsAnimation && len(anims) == 0
 	if !needRetry {
 		if violations := checkAnimsBounds(anims); len(violations) > 0 {
 			log.Printf("[streamGenerate] bounds violations in first response: %v", violations)

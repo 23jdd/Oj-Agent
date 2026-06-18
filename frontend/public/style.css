@@ -9,34 +9,34 @@
     --font-main: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --font-mono: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
 
-    /* depth */
-    --bg-deepest: #070b13;
-    --bg-main: #0c1119;
-    --bg-panel: #111827;
-    --bg-elevated: #161e2e;
-    --bg-hover: #1c2538;
+    /* depth — 深空底色，模拟流萤/SAM 的星间战场 */
+    --bg-deepest: #040d1a;
+    --bg-main: #091420;
+    --bg-panel: #0e1b2e;
+    --bg-elevated: #132438;
+    --bg-hover: #192e48;
 
     /* borders */
-    --border-subtle: rgba(255,255,255,0.05);
-    --border-default: rgba(255,255,255,0.08);
-    --border-focus: #3b82f6;
+    --border-subtle: rgba(6,182,212,0.06);
+    --border-default: rgba(6,182,212,0.10);
+    --border-focus: #06b6d4;
 
-    /* brand */
-    --accent: #3b82f6;
-    --accent-light: #60a5fa;
-    --accent-glow: rgba(59,130,246,0.18);
-    --accent-violet: #8b5cf6;
-    --accent-violet-light: #a78bfa;
+    /* brand — 核心色：流萤的青蓝能量 + SAM 的紫色副调 */
+    --accent: #06b6d4;
+    --accent-light: #22d3ee;
+    --accent-glow: rgba(6,182,212,0.22);
+    --accent-violet: #a855f7;
+    --accent-violet-light: #c084fc;
     --success: #10b981;
-    --success-glow: rgba(16,185,129,0.2);
+    --success-glow: rgba(16,185,129,0.22);
     --warning: #f59e0b;
     --danger: #ef4444;
 
     /* text */
-    --text-primary: #eef2ff;
+    --text-primary: #e2e8f0;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    --text-dim: #475569;
+    --text-dim: #4b5563;
 
     /* radius */
     --radius-xs: 4px;
@@ -46,28 +46,28 @@
     --radius-xl: 20px;
 
     /* shadows */
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03);
-    --shadow-lg: 0 8px 30px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
-    --shadow-glow: 0 0 20px var(--accent-glow);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(6,182,212,0.04);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(6,182,212,0.05);
+    --shadow-glow: 0 0 24px var(--accent-glow);
 
     /* transitions */
     --transition-fast: 0.15s cubic-bezier(0.4,0,0.2,1);
     --transition-smooth: 0.3s cubic-bezier(0.4,0,0.2,1);
     --transition-spring: 0.4s cubic-bezier(0.34,1.56,0.64,1);
 
-    /* glass */
-    --glass-bg: rgba(13,20,30,0.72);
-    --glass-border: rgba(255,255,255,0.06);
-    --glass-hover: rgba(255,255,255,0.04);
-    --glass-active: rgba(255,255,255,0.07);
+    /* glass — 半透明磨砂面板，带青蓝底色 */
+    --glass-bg: rgba(9,20,32,0.76);
+    --glass-border: rgba(6,182,212,0.08);
+    --glass-hover: rgba(6,182,212,0.05);
+    --glass-active: rgba(6,182,212,0.10);
     --glass-blur: 20px;
-    --glass-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    --glass-shadow: 0 8px 32px rgba(0,0,0,0.4);
 
-    /* gradients */
-    --gradient-brand: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-    --gradient-success: linear-gradient(135deg, #10b981 0%, #34d399 100%);
-    --gradient-hero: linear-gradient(180deg, rgba(59,130,246,0.06) 0%, transparent 50%);
+    /* gradients — 流萤能量渐变：青→绿、青→紫 */
+    --gradient-brand: linear-gradient(135deg, #06b6d4 0%, #a855f7 100%);
+    --gradient-success: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+    --gradient-hero: linear-gradient(180deg, rgba(6,182,212,0.08) 0%, transparent 50%);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -91,7 +91,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
 
 ::selection {
-    background: rgba(59,130,246,0.35);
+    background: rgba(6,182,212,0.35);
     color: #fff;
 }
 
@@ -111,6 +111,84 @@ input, textarea, select, button {
 }
 
 @keyframes borderGlow {
-    0%, 100% { border-color: rgba(59,130,246,0.2); box-shadow: 0 0 8px rgba(59,130,246,0.08); }
-    50%      { border-color: rgba(59,130,246,0.4); box-shadow: 0 0 16px rgba(59,130,246,0.15); }
+    0%, 100% { border-color: rgba(6,182,212,0.2); box-shadow: 0 0 8px rgba(6,182,212,0.08); }
+    50%      { border-color: rgba(6,182,212,0.5); box-shadow: 0 0 18px rgba(6,182,212,0.18); }
+}
+
+@keyframes fireflyFloat1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(12px, -8px) scale(1.2); }
+    66%      { transform: translate(-6px, -16px) scale(0.9); }
+}
+@keyframes fireflyFloat2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    28%      { transform: translate(-10px, -5px) scale(1.15); }
+    55%      { transform: translate(-18px, -12px) scale(0.85); }
+    82%      { transform: translate(-5px, -3px) scale(1.1); }
+}
+@keyframes fireflyFloat3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    40%      { transform: translate(8px, -6px) scale(1.25); }
+    80%      { transform: translate(-4px, -10px) scale(0.95); }
+}
+@keyframes fireflyPulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(6,182,212,0.4), 0 0 8px rgba(6,182,212,0.15); }
+    50%      { box-shadow: 0 0 8px rgba(6,182,212,0.7), 0 0 16px rgba(6,182,212,0.30); }
+}
+@keyframes samEnergyPulse {
+    0%, 100% { opacity: 0.40; transform: scaleX(1); }
+    50%      { opacity: 0.75; transform: scaleX(1.06); }
+}
+@keyframes samScanline {
+    0%   { top: -2px;   opacity: 0.12; }
+    95%  { top: 100%;   opacity: 0.12; }
+    100% { top: 100%;   opacity: 0; }
+}
+@keyframes fireflyDrift {
+    0%   { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(-8px, -12px) rotate(1deg); }
+}
+@keyframes particleTwinkle {
+    0%, 100% { opacity: 0.5; }
+    33%      { opacity: 1; }
+    66%      { opacity: 0.3; }
+}
+
+/* 流萤粒子层 — 明亮闪烁的萤火 */
+body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+        radial-gradient(3px 3px at 12% 18%, rgba(6,182,212,0.85) 0%, transparent 100%),
+        radial-gradient(4px 4px at 78% 25%, rgba(34,211,238,0.75) 0%, transparent 100%),
+        radial-gradient(3px 3px at 45% 62%, rgba(6,182,212,0.80) 0%, transparent 100%),
+        radial-gradient(5px 5px at 22% 75%, rgba(16,185,129,0.70) 0%, transparent 100%),
+        radial-gradient(3px 3px at 65% 80%, rgba(6,182,212,0.75) 0%, transparent 100%),
+        radial-gradient(4px 4px at 88% 15%, rgba(168,85,247,0.65) 0%, transparent 100%),
+        radial-gradient(3px 3px at 35% 8%,  rgba(34,211,238,0.80) 0%, transparent 100%),
+        radial-gradient(4px 4px at 55% 45%, rgba(6,182,212,0.70) 0%, transparent 100%),
+        radial-gradient(3px 3px at 8%  55%, rgba(168,85,247,0.65) 0%, transparent 100%),
+        radial-gradient(5px 5px at 72% 5%,  rgba(16,185,129,0.65) 0%, transparent 100%),
+        radial-gradient(3px 3px at 18% 90%, rgba(6,182,212,0.80) 0%, transparent 100%),
+        radial-gradient(4px 4px at 90% 70%, rgba(34,211,238,0.70) 0%, transparent 100%),
+        radial-gradient(3px 3px at 5%  42%, rgba(6,182,212,0.75) 0%, transparent 100%),
+        radial-gradient(4px 4px at 40% 35%, rgba(168,85,247,0.60) 0%, transparent 100%),
+        radial-gradient(3px 3px at 82% 55%, rgba(34,211,238,0.70) 0%, transparent 100%),
+        radial-gradient(5px 5px at 30% 5%,  rgba(6,182,212,0.60) 0%, transparent 100%);
+    animation: fireflyDrift 20s linear infinite alternate;
+}
+
+/* 粒子分组呼吸光晕 */
+body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    mix-blend-mode: screen;
+    background:
+        radial-gradient(circle 220px at 15% 20%, rgba(6,182,212,0.16) 0%, transparent 100%),
+        radial-gradient(circle 180px at 80% 30%, rgba(34,211,238,0.12) 0%, transparent 100%),
+        radial-gradient(circle 240px at 50% 60%, rgba(6,182,212,0.14) 0%, transparent 100%),
+        radial-gradient(circle 200px at 25% 78%, rgba(16,185,129,0.10) 0%, transparent 100%),
+        radial-gradient(circle 160px at 88% 72%, rgba(168,85,247,0.10) 0%, transparent 100%),
+        radial-gradient(circle 150px at 40% 15%, rgba(34,211,238,0.10) 0%, transparent 100%);
+    animation: particleTwinkle 6s ease-in-out infinite;
 }

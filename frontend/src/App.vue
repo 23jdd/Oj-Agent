@@ -131,16 +131,37 @@ onMounted(async () => {
   width: 100vw; height: 100vh;
   background: var(--bg-deepest);
   position: relative;
+  overflow: hidden;
 }
 
 .app-shell::before {
   content: '';
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 80% 60% at 15% 30%, rgba(59,130,246,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 70% at 85% 70%, rgba(139,92,246,0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(59,130,246,0.02) 0%, transparent 70%);
+    radial-gradient(ellipse 80% 60% at 15% 30%, rgba(6,182,212,0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 70% at 85% 70%, rgba(168,85,247,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 50% 40%, rgba(6,182,212,0.06) 0%, transparent 70%);
   pointer-events: none; z-index: 0;
+}
+
+/* SAM 装甲能量线 — 明显斜向光迹 */
+.app-shell::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    linear-gradient(135deg, transparent 0%, rgba(6,182,212,0.10) 45%, rgba(34,211,238,0.18) 50%, rgba(6,182,212,0.10) 55%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, rgba(6,182,212,0.08) 48%, rgba(34,211,238,0.12) 50%, rgba(6,182,212,0.08) 52%, transparent 100%),
+    linear-gradient(90deg, transparent 0%, rgba(168,85,247,0.06) 95%, rgba(168,85,247,0.12) 98%, transparent 100%);
+}
+
+/* SAM HUD 扫描线 — 更亮 */
+.app-layout::before {
+  content: '';
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(6,182,212,0.30) 15%, rgba(34,211,238,0.55) 50%, rgba(6,182,212,0.30) 85%, transparent);
+  z-index: 10; pointer-events: none;
+  box-shadow: 0 0 10px rgba(6,182,212,0.25), 0 0 3px rgba(34,211,238,0.4);
+  animation: samScanline 8s linear infinite;
 }
 
 .app-layout {

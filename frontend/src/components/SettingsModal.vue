@@ -189,9 +189,9 @@ const clearConfig = async () => {
   outline: none; transition: all var(--transition-fast);
 }
 .field-input:focus {
-  border-color: rgba(59,130,246,0.35);
-  background: rgba(59,130,246,0.03);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+  border-color: rgba(6,182,212,0.35);
+  background: rgba(6,182,212,0.03);
+  box-shadow: 0 0 0 3px rgba(6,182,212,0.08);
 }
 .field-input::placeholder { color: var(--text-dim); }
 .field-input.mono { font-family: var(--font-mono); font-size: 13px; }
@@ -215,9 +215,9 @@ const clearConfig = async () => {
 }
 .btn-primary {
   background: var(--gradient-brand);
-  color: #fff; box-shadow: 0 2px 12px rgba(59,130,246,0.25);
+  color: #fff; box-shadow: 0 2px 12px rgba(6,182,212,0.25);
 }
-.btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.35); }
+.btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(6,182,212,0.35); }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-ghost {
   background: transparent; color: var(--text-dim);
@@ -231,7 +231,7 @@ const clearConfig = async () => {
   font-size: 12px; font-weight: 500;
 }
 .status-bar.connected { background: rgba(16,185,129,0.06); color: var(--success); border: 1px solid rgba(16,185,129,0.12); }
-.status-bar.testing { background: rgba(59,130,246,0.06); color: var(--accent-light); border: 1px solid rgba(59,130,246,0.12); }
+.status-bar.testing { background: rgba(6,182,212,0.06); color: var(--accent-light); border: 1px solid rgba(6,182,212,0.12); }
 .status-bar.error { background: rgba(239,68,68,0.06); color: var(--danger); border: 1px solid rgba(239,68,68,0.12); }
 .status-bar.mock { background: var(--glass-hover); color: var(--text-dim); border: 1px solid var(--glass-border); }
 .status-dot {

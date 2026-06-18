@@ -304,8 +304,8 @@ const renderContent = (content) => {
 .toolbar-left { display: flex; align-items: center; gap: 10px; }
 .model-badge {
   padding: 5px 12px;
-  background: rgba(59,130,246,0.08);
-  border: 1px solid rgba(59,130,246,0.15);
+  background: rgba(6,182,212,0.08);
+  border: 1px solid rgba(6,182,212,0.15);
   border-radius: 20px; color: var(--accent-light);
   font-size: 11px; font-weight: 600; font-family: var(--font-mono);
   white-space: nowrap; letter-spacing: 0.3px;
@@ -318,7 +318,7 @@ const renderContent = (content) => {
   outline: none; cursor: pointer; transition: all var(--transition-fast);
 }
 .tool-select:hover { border-color: rgba(255,255,255,0.12); background: var(--glass-active); }
-.tool-select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.tool-select:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(6,182,212,0.1); }
 .tool-hint {
   font-size: 10px; color: var(--text-dim);
   background: var(--glass-hover); padding: 4px 10px;
@@ -350,7 +350,7 @@ const renderContent = (content) => {
   background: var(--gradient-brand);
   border-radius: 18px; display: flex; align-items: center; justify-content: center;
   margin-bottom: 24px;
-  box-shadow: 0 0 48px rgba(59,130,246,0.25), 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 0 48px rgba(6,182,212,0.25), 0 8px 24px rgba(0,0,0,0.4);
 }
 .welcome h2 {
   font-size: 26px; font-weight: 700; color: var(--text-primary);
@@ -381,9 +381,9 @@ const renderContent = (content) => {
   cursor: pointer; transition: all var(--transition-smooth);
 }
 .hint-tag:hover {
-  background: rgba(59,130,246,0.1); color: var(--accent-light);
-  border-color: rgba(59,130,246,0.3); transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(59,130,246,0.12);
+  background: rgba(6,182,212,0.1); color: var(--accent-light);
+  border-color: rgba(6,182,212,0.3); transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(6,182,212,0.12);
 }
 
 /* ---- Messages ---- */
@@ -398,12 +398,12 @@ const renderContent = (content) => {
   font-size: 11px; font-weight: 700;
 }
 .message.user .message-avatar {
-  background: linear-gradient(135deg, #3b82f6, #2563eb); color:#fff;
-  box-shadow: 0 2px 12px rgba(59,130,246,0.3);
+  background: linear-gradient(135deg, #06b6d4, #0891b2); color:#fff;
+  box-shadow: 0 2px 12px rgba(6,182,212,0.3);
 }
 .message.assistant .message-avatar {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed); color:#fff;
-  box-shadow: 0 2px 12px rgba(139,92,246,0.3);
+  background: linear-gradient(135deg, #a855f7, #9333ea); color:#fff;
+  box-shadow: 0 2px 12px rgba(168,85,247,0.3);
 }
 .message-body { min-width: 0; max-width: 82%; }
 .message.user .message-body { display: flex; flex-direction: column; align-items: flex-end; }
@@ -418,7 +418,7 @@ const renderContent = (content) => {
 .message.user .message-text {
   background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
   color: #e4edff; border-bottom-right-radius: var(--radius-xs);
-  box-shadow: 0 4px 16px rgba(59,130,246,0.2);
+  box-shadow: 0 4px 16px rgba(6,182,212,0.2);
 }
 .message.assistant .message-text {
   background: var(--glass-bg);
@@ -438,17 +438,17 @@ const renderContent = (content) => {
 .anim-badge {
   display: flex; align-items: center; gap: 4px;
   padding: 5px 10px; border-radius: var(--radius-xl);
-  background: rgba(59,130,246,0.08);
-  border: 1px solid rgba(59,130,246,0.15);
+  background: rgba(6,182,212,0.08);
+  border: 1px solid rgba(6,182,212,0.15);
   color: var(--accent-light);
   cursor: pointer; opacity: 0.6; transition: all 0.25s ease; white-space: nowrap;
 }
 .anim-badge:hover {
   opacity: 1;
-  background: rgba(59,130,246,0.16);
-  border-color: rgba(59,130,246,0.3);
+  background: rgba(6,182,212,0.16);
+  border-color: rgba(6,182,212,0.3);
   transform: scale(1.04);
-  box-shadow: 0 0 16px rgba(59,130,246,0.15);
+  box-shadow: 0 0 16px rgba(6,182,212,0.15);
 }
 .anim-badge-label { font-size: 10px; font-weight: 500; }
 
@@ -485,9 +485,9 @@ const renderContent = (content) => {
 .message-text :deep(blockquote) {
   display: flex; gap: 10px; border: none; padding: 12px 16px; margin: 12px 0;
   color: var(--text-secondary);
-  background: rgba(59,130,246,0.04);
+  background: rgba(6,182,212,0.04);
   border-radius: var(--radius-md);
-  border: 1px solid rgba(59,130,246,0.1);
+  border: 1px solid rgba(6,182,212,0.1);
 }
 .message-text :deep(.blockquote-icon) { color: var(--accent); font-weight: 700; font-size: 16px; line-height: 1; flex-shrink: 0; }
 .message-text :deep(li) { margin-left: 24px; padding: 3px 0; line-height: 1.7; }
@@ -529,9 +529,9 @@ const renderContent = (content) => {
   transition: all var(--transition-fast);
 }
 .input-box textarea:focus {
-  border-color: rgba(59,130,246,0.35);
-  background: rgba(59,130,246,0.03);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.08), 0 0 24px rgba(59,130,246,0.05);
+  border-color: rgba(6,182,212,0.35);
+  background: rgba(6,182,212,0.03);
+  box-shadow: 0 0 0 3px rgba(6,182,212,0.08), 0 0 24px rgba(6,182,212,0.05);
 }
 .input-box textarea::placeholder { color: var(--text-dim); }
 .send-btn {
@@ -540,11 +540,11 @@ const renderContent = (content) => {
   border: none; border-radius: var(--radius-md); color: #fff; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: all var(--transition-smooth); flex-shrink: 0;
-  box-shadow: 0 4px 16px rgba(59,130,246,0.25);
+  box-shadow: 0 4px 16px rgba(6,182,212,0.25);
 }
 .send-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(59,130,246,0.4);
+  box-shadow: 0 8px 28px rgba(6,182,212,0.4);
 }
 .send-btn:disabled {
   background: var(--bg-elevated); color: var(--text-dim);

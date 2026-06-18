@@ -83,11 +83,11 @@ watch(() => [props.currentStep, props.frames], ([step, frames]) => {
 
 function fillColor(style) {
   switch (style) {
-    case 'highlight': return '#3b82f6'
+    case 'highlight': return '#06b6d4'
     case 'compare': return '#f59e0b'
     case 'swap': return '#ef4444'
     case 'result': return '#10b981'
-    case 'pivot': return '#8b5cf6'
+    case 'pivot': return '#a855f7'
     case 'dim': return '#1e293b'
     default: return '#1e293b'
   }
@@ -95,20 +95,20 @@ function fillColor(style) {
 
 function glowColor(style) {
   switch (style) {
-    case 'highlight': return 'rgba(59,130,246,0.45)'
+    case 'highlight': return 'rgba(6,182,212,0.45)'
     case 'compare': return 'rgba(245,158,11,0.45)'
     case 'swap': return 'rgba(239,68,68,0.45)'
     case 'result': return 'rgba(16,185,129,0.45)'
-    case 'pivot': return 'rgba(139,92,246,0.45)'
+    case 'pivot': return 'rgba(168,85,247,0.45)'
     default: return 'transparent'
   }
 }
 
 function strokeColor(style) {
-  if (style === 'highlight') return '#60a5fa'
+  if (style === 'highlight') return '#22d3ee'
   if (style === 'swap') return '#f87171'
   if (style === 'compare') return '#fbbf24'
-  if (style === 'pivot') return '#a78bfa'
+  if (style === 'pivot') return '#c084fc'
   if (style === 'result') return '#34d399'
   return '#475569'
 }
@@ -150,16 +150,16 @@ const gridDefs = computed(() => [...props.elements.filter(e => e.showGrid)])
   <svg :viewBox="viewBox" width="100%" preserveAspectRatio="xMidYMid meet" class="universal-renderer">
     <defs>
       <filter v-for="e in elements.filter(x => x.showGrid)" :key="'grid-'+e.id" :id="'grid-'+e.id" x="0" y="0" :width="e.w||100" :height="e.h||100">
-        <feFlood flood-color="rgba(59,130,246,0.04)"/>
+        <feFlood flood-color="rgba(6,182,212,0.04)"/>
         <feComposite in="SourceGraphic"/>
       </filter>
     </defs>
 
-    <rect :width="svgW" :height="svgH" fill="#0c1119" />
+    <rect :width="svgW" :height="svgH" fill="#040d1a" />
 
     <!-- Grid backgrounds for DP tables -->
     <g v-for="el in elements.filter(e => e.showGrid)" :key="'gridbg-'+el.id">
-      <rect :x="el.x" :y="el.y" :width="el.w" :height="el.h" fill="rgba(59,130,246,0.03)" stroke="rgba(59,130,246,0.08)" rx="4" />
+      <rect :x="el.x" :y="el.y" :width="el.w" :height="el.h" fill="rgba(6,182,212,0.03)" stroke="rgba(6,182,212,0.08)" rx="4" />
     </g>
 
     <!-- Lines -->
@@ -266,7 +266,7 @@ const gridDefs = computed(() => [...props.elements.filter(e => e.showGrid)])
           :y="state[el.id].y - 4"
           width="12" height="8"
           rx="3"
-          :fill="state[el.id].style === 'dim' ? 'rgba(30,41,59,0.6)' : 'rgba(59,130,246,0.15)'"
+          :fill="state[el.id].style === 'dim' ? 'rgba(30,41,59,0.6)' : 'rgba(6,182,212,0.15)'"
           style="transition: all 0.3s ease"
         />
         <text

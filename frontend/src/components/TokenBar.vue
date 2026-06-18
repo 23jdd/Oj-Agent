@@ -44,6 +44,12 @@ const formatTokens = (val) => {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   font-size: 12px;
   border-top: 1px solid var(--glass-border);
+  position: relative;
+}
+.token-bar::before {
+  content: '';
+  position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(6,182,212,0.18) 25%, rgba(34,211,238,0.30) 50%, rgba(6,182,212,0.18) 75%, transparent);
 }
 .token-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .token-label { color: var(--text-dim); font-weight: 500; font-size: 11px; }
