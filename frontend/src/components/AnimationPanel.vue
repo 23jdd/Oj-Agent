@@ -97,6 +97,8 @@ watch(() => props.animationData, (data) => {
 
 function handleKey(e) {
   if (e.code === 'Escape' && isFullscreen.value) { exitFullscreen(); return }
+  const tag = document.activeElement?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || document.activeElement?.isContentEditable) return
   if (steps.value.length === 0) return
   if (e.code === 'Space') { e.preventDefault(); isPlaying.value ? pause() : play() }
   if (e.code === 'ArrowRight') { e.preventDefault(); stepNext() }
