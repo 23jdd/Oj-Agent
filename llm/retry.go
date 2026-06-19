@@ -52,18 +52,30 @@ func (c *Client) GenerateWithRetry(ctx context.Context, problem, language, histo
 
 	for round := 1; round <= MaxRetryRounds; round++ {
 		correctionPrompt := fmt.Sprintf(
-			"之前的输出中%s\n请重新生成动画 JSON。注意：\n"+
-				"1. 用 ---ANIM--- 分隔多个动画\n"+
-				"2. 每个动画标签行后紧跟完整的 JSON 对象\n"+
-				"3. JSON 必须包含 svgW, svgH, elements, frames 四个字段\n"+
-				"4. 所有元素的坐标(x/y/x2/y2)必须在面板范围内（0 到 svgW/svgH）\n"+
-				"5. 元素间留足够间距(gap=52~60)，不要挤在边缘\n"+
-				"6. delta 中的每个 key 必须是 elements 中已定义的 id\n"+
-				"7. 不要用 markdown 代码块（```json）包裹 JSON\n"+
-				"8. 确保 JSON 语法正确，无多余尾逗号\n\n"+
-				"题目: %s\n语言: %s", correctionMsg, problem, language)
+			"之前为以下题目生成的动画 JSON 有错误，请修正后重新生成。\n\n"+
+				"## 原题目\n%s\n语言: %s\n\n"+
+				"## 错误详情\n%s\n\n"+
+				"## 修正要求\n"+
+				"1. 用 ---ANIM--- 分隔多个动画，每个动画展示一个完整用例\n"+
+				"2. 每个动画必须有 svgW, svgH, elements, frames 四个字段\n"+
+				"3. svgW 和 svgH 是纯数字（不带引号）\n"+
+				"4. 计算 svgW: 最右元素 x+w + 40，推荐 260~700\n"+
+				"5. 计算 svgH: 最下元素 y+h + 40，推荐 120~500\n"+
+				"6. 元素 x 坐标 ≥ 12，y 坐标 ≥ 12，留足 margin\n"+
+				"7. rect 尺寸 w=44~56 h=38~42, circle r=20~24, 间距 gap=52~60\n"+
+				"8. delta 中每个 key 必须是 elements 中已定义的 id\n"+
+				"9. JSON 语法正确：无尾逗号，无多余字段，括号配对\n"+
+				"10. 不要用 markdown 代码块包裹 JSON，直接输出裸 JSON\n\n"+
+				"请现在输出修正后的动画 JSON：", problem, language, correctionMsg)
 
-		animContent, retryErr := c.Generate(ctx, correctionPrompt, language, correctionHistory)
+		var animContent string
+		var retryErr error
+
+		if round >= 3 {
+			animContent, retryErr = c.GenerateAnimOnly(ctx, problem, language, correctionMsg)
+		} else {
+			animContent, retryErr = c.Generate(ctx, correctionPrompt, language, correctionHistory)
+		}
 		if retryErr != nil {
 			log.Printf("[LLM] retry %d: generate error: %v", round, retryErr)
 			continue

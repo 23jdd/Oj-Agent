@@ -2,11 +2,13 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
+	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/prompt"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
@@ -416,6 +418,48 @@ normal=灰 highlight=蓝 compare=黄 swap=红 result=绿 pivot=紫 dim=暗灰
 
 直接输出JSON。`
 
+var animOnlySystemPrompt = `你是一个算法动画 JSON 生成器。根据题目和修正提示，生成精确的动画 JSON。
+
+必须严格遵守以下规则：
+
+## 输出格式
+用 ---ANIM--- 分隔多个动画，每个动画一个 JSON 对象。
+
+## JSON 字段
+- svgW: 数字，最右元素 x+w+40，范围 240~700
+- svgH: 数字，最下元素 y+h+40，范围 100~500
+- elements: 数组，每个元素有 id kind x y
+- frames: 数组，每个帧有 desc delta
+
+## 坐标计算
+- 第一个元素 x=12, y=50（留左边距和上边距）
+- rect: w=48~56 h=38~42, 间距 gap=52~60
+- circle: r=22, 间距 gap=60~80
+- label: x 不超出面板宽度
+- 所有 x/y/x2/y2 必须在 0 到 svgW/svgH 范围内
+
+## 元素类型
+- rect: 数组格/链表节点/DP单元格, rx=6
+- circle: 树节点/图节点
+- line: 边/指针/箭头, arrow=true
+- label: 文本标签
+
+## 颜色 style
+normal=灰 highlight=青 swap=红 compare=黄 result=绿 pivot=紫 dim=暗灰
+
+## 帧 delta 规则
+- 只写变化量，第一帧初始化当前关注元素
+- delta 的 key 必须是 elements 中已有的 id
+- 初始态用 highlight，中间过程用 compare/swap/pivot，完成后用 result
+
+## JSON 语法
+- 纯数字字段不带引号
+- 无尾逗号
+- 括号正确配对
+- 不包裹在 markdown 代码块中
+
+请直接输出动画 JSON，不要输出任何解释。`
+
 type TokenUsage struct {
 	PromptTokens     int `json:"promptTokens"`
 	CompletionTokens int `json:"completionTokens"`
@@ -467,9 +511,12 @@ func NewClient(cfg *Config) (*Client, error) {
 	}
 
 	cm, err := deepseek.NewChatModel(context.Background(), &deepseek.ChatModelConfig{
-		APIKey:  cfg.APIKey,
-		BaseURL: cfg.BaseURL,
-		Model:   cfg.Model,
+		APIKey:           cfg.APIKey,
+		BaseURL:          cfg.BaseURL,
+		Model:            cfg.Model,
+		Temperature:      0.1,  // 极低温度：动画 JSON 需要高精度坐标
+		MaxTokens:        8192, // 足够容纳 markdown + 多个动画 JSON
+		FrequencyPenalty: 0.3,  // 减少 frame 中的重复描述
 	})
 	if err != nil {
 		return nil, err
@@ -524,6 +571,21 @@ func NewClient(cfg *Config) (*Client, error) {
 
 func (c *Client) SetTokenCallback(cb TokenCallback) {
 	c.tokenCallback = cb
+}
+
+func (c *Client) GenerateAnimOnly(ctx context.Context, problem string, language string, correctionHint string) (string, error) {
+	msgs := []*schema.Message{
+		schema.SystemMessage(animOnlySystemPrompt),
+		schema.UserMessage(fmt.Sprintf("题目: %s\n语言: %s\n%s", problem, language, correctionHint)),
+	}
+
+	result, err := c.model.Generate(ctx, msgs, model.WithTemperature(0.05))
+	if err != nil {
+		log.Printf("[LLM] GenerateAnimOnly error: %v", err)
+		return "", err
+	}
+
+	return result.Content, nil
 }
 
 func (c *Client) Available() bool {
