@@ -9,6 +9,7 @@ pub mod process;
 pub mod renderer;
 pub mod runtime;
 pub mod session;
+pub mod settings;
 pub mod style;
 pub mod tools;
 pub mod trace;

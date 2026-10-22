@@ -29,6 +29,8 @@ export component AppWindow inherits Window {
     in property <[StyleField]> style-fields;
     in property <string> style-error;
     in property <string> style-path;
+    in property <string> model-config-path;
+    in-out property <string> settings-error;
     callback open-style;
     callback edit-style(int, string);
     callback save-style;
@@ -72,6 +74,7 @@ export component AppWindow inherits Window {
     callback new-session;
     callback select-session(string);
     callback delete-session;
+    callback save-model;
     callback play-pause;
     callback step(bool);
     callback restart;
@@ -103,7 +106,7 @@ export component AppWindow inherits Window {
             }
             AppButton { text: "会话"; width: 80px; horizontal-stretch: 0; selected: root.history-open; clicked => { root.history-open = !root.history-open; } }
             AppButton { text: "外观"; width: 80px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.settings-open = false; root.open-style(); } }
-            AppButton { text: "模型设置"; width: 128px; horizontal-stretch: 0; clicked => { root.style-open = false; root.settings-open = true; } }
+            AppButton { text: "模型设置"; width: 128px; horizontal-stretch: 0; clicked => { root.style-open = false; root.settings-error = ""; root.settings-open = true; } }
             HorizontalLayout {
                 spacing: Theme.spacing-xs;
                 IconButton { text: "最小化"; icon: @image-url("icons/window-minimize.svg"); clicked => { root.minimized = true; } }
@@ -248,11 +251,11 @@ export component AppWindow inherits Window {
         TouchArea {}
         Panel {
             x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            width: 640px; height: 440px;
+            width: 640px; height: 520px;
             VerticalLayout {
                 padding: Theme.spacing-xl; spacing: Theme.spacing-md;
                 Text { text: "模型设置 / MODEL"; color: Theme.text-primary; font-size: Theme.heading-size; font-weight: 700; }
-                SectionLabel { text: "密钥仅用于当前运行，不写入会话。"; }
+                SectionLabel { text: "配置保存在本机；API Key 只写入本机配置文件，不写入会话。"; }
                 HorizontalLayout {
                     spacing: Theme.spacing-md;
                     SelectBox { model: ["OpenAI", "DeepSeek", "兼容接口"]; current-index <=> root.provider-index; enabled: !root.busy; }
@@ -263,9 +266,13 @@ export component AppWindow inherits Window {
                 SectionLabel { text: "接口地址 / ENDPOINT"; }
                 TextField { text <=> root.endpoint; placeholder-text: "留空使用默认地址；兼容接口填写 /v1 地址"; enabled: !root.busy; }
                 SectionLabel { text: "对话使用所选模型；动画与代码检查由 AI 按需调用。"; }
+                if root.settings-error != "": Text { text: root.settings-error; color: Theme.danger; font-size: Theme.label-size; wrap: word-wrap; max-height: 48px; }
+                Text { text: "配置文件：" + root.model-config-path; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
                 HorizontalLayout {
+                    spacing: Theme.spacing-sm;
                     Rectangle { horizontal-stretch: 1; }
-                    AppButton { text: "完成"; width: 104px; horizontal-stretch: 0; primary: true; clicked => { root.settings-open = false; } }
+                    AppButton { text: "取消"; width: 104px; horizontal-stretch: 0; clicked => { root.settings-error = ""; root.settings-open = false; } }
+                    AppButton { text: "保存"; width: 104px; horizontal-stretch: 0; primary: true; clicked => { root.save-model(); } }
                 }
             }
         }

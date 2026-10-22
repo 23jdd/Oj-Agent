@@ -22,7 +22,7 @@ Open **模型设置**, configure OpenAI, DeepSeek or a compatible endpoint, then
 - Optional AI-triggered code verification and animation; no algorithm/sample forms.
 - Portable JavaScript VM with time, memory and stack limits; no host file/network/process APIs or Docker.
 - Normal, boundary and adversarial checks; separate animation timelines for each case.
-- Slint desktop UI, Skia playback, GIF/JSON export and saved appearance settings.
+- Slint desktop UI, Skia playback, GIF/JSON export, and saved model and appearance settings.
 - Rig model providers, validated IR, SQLite artifacts, cancellation and bounded tool rounds.
 
 The portable sandbox executes JavaScript. Checks of AI-translated Python/C++/Rust algorithms are clearly labeled; they do not execute or prove the original programs. Passing supplied tests is not exhaustive correctness verification.

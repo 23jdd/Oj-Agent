@@ -19,7 +19,9 @@ use std::{
 #[serde(rename_all = "kebab-case")]
 pub enum Provider {
     #[default]
+    #[serde(alias = "openai")]
     OpenAi,
+    #[serde(alias = "deepseek")]
     DeepSeek,
     Compatible,
 }

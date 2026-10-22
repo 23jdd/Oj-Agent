@@ -6,6 +6,7 @@ use crate::{
     ir::*,
     renderer::RasterSize,
     session::{SessionStore, SqliteStore},
+    settings::ModelSettings,
     style::StyleConfig,
 };
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
@@ -84,6 +85,20 @@ fn show_error(ui: &AppWindow, error: AppError) {
         }
         .into(),
     );
+}
+fn provider_index(provider: &Provider) -> i32 {
+    match provider {
+        Provider::OpenAi => 0,
+        Provider::DeepSeek => 1,
+        Provider::Compatible => 2,
+    }
+}
+fn provider_from_index(index: i32) -> Provider {
+    match index {
+        1 => Provider::DeepSeek,
+        2 => Provider::Compatible,
+        _ => Provider::OpenAi,
+    }
 }
 fn session_label(title: &str) -> String {
     title.split_whitespace().collect::<Vec<_>>().join(" ")
@@ -284,6 +299,18 @@ pub fn run() -> anyhow::Result<()> {
         Err(error) => (StyleConfig::default(), Some(error)),
     };
     appearance::apply(&ui, &style);
+    let model_path = std::env::var_os("OJ_MODEL_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or(data_dir()?.join("model.json"));
+    let (model, model_error) = match ModelSettings::load(&model_path) {
+        Ok(model) => (model, None),
+        Err(error) => (ModelSettings::default(), Some(error)),
+    };
+    ui.set_provider_index(provider_index(&model.provider));
+    ui.set_model_name(model.model.clone().into());
+    ui.set_endpoint(model.endpoint.clone().into());
+    ui.set_api_key(model.api_key.clone().into());
+    ui.set_model_config_path(model_path.display().to_string().into());
     let db = database_path()?;
     SqliteStore::open(&db)?.recover_interrupted()?;
     refresh_sessions(&ui, &db)?;
@@ -308,8 +335,32 @@ pub fn run() -> anyhow::Result<()> {
         db,
     }));
     appearance::bind(&ui, state.clone(), style_path);
-    if let Some(error) = style_error {
+    if let Some(error) = style_error.or(model_error) {
         show_error(&ui, error);
+    }
+    {
+        let weak = ui.as_weak();
+        let path = model_path.clone();
+        ui.on_save_model(move || {
+            if let Some(ui) = weak.upgrade() {
+                let settings = ModelSettings {
+                    version: crate::settings::VERSION,
+                    provider: provider_from_index(ui.get_provider_index()),
+                    model: ui.get_model_name().into(),
+                    endpoint: ui.get_endpoint().into(),
+                    api_key: ui.get_api_key().into(),
+                };
+                match settings.save(&path) {
+                    Ok(()) => {
+                        ui.set_settings_open(false);
+                        ui.set_settings_error("".into());
+                        ui.set_error_text("".into());
+                        ui.set_status_text("模型配置已保存".into());
+                    }
+                    Err(error) => ui.set_settings_error(error.to_string().into()),
+                }
+            }
+        });
     }
     {
         let weak = ui.as_weak();
@@ -322,11 +373,7 @@ pub fn run() -> anyhow::Result<()> {
                 return;
             }
             let config = ModelConfig {
-                provider: match ui.get_provider_index() {
-                    1 => Provider::DeepSeek,
-                    2 => Provider::Compatible,
-                    _ => Provider::OpenAi,
-                },
+                provider: provider_from_index(ui.get_provider_index()),
                 model: ui.get_model_name().into(),
                 endpoint: ui.get_endpoint().into(),
                 api_key: ui.get_api_key().into(),

@@ -1,6 +1,6 @@
 # Chat workflow / 对话工作流
 
-The desktop is a conversation, not an algorithm configuration form. Set a provider, model and API key in **模型设置**, then send normal messages. Replies render Markdown headings, emphasis, lists, quotes, fenced code, tables and links. Code blocks are selectable and scroll when long. Use **Ctrl+Enter** to send; **停止** cancels model work and sandbox execution. API keys stay in memory.
+The desktop is a conversation, not an algorithm configuration form. Set a provider, model and API key in **模型设置**, then send normal messages. Replies render Markdown headings, emphasis, lists, quotes, fenced code, tables and links. Code blocks are selectable and scroll when long. Use **Ctrl+Enter** to send; **停止** cancels model work and sandbox execution. Provider, model, endpoint and API key are saved to a local settings file; keys never enter sessions.
 
 输入 `@`（位于单词开头）或点击“@ 添加文件”打开系统文件选择器。附件在添加时读取为快照，显示名称，可在发送前移除。每条消息最多 8 个 UTF-8 文本文件，每个不超过 100 KB；文件后续修改不会悄悄改变已发送内容。发送消息会将这些内容提供给所选模型，并保存到本机会话数据库中。应用不会扫描或自动上传其他文件。
 
@@ -34,7 +34,7 @@ Save this request as `verify.json`, then run `cargo run -- tool sandbox.verify -
 
 ## Persistence and review
 
-SQLite stores chat messages, attachment snapshots, tool calls, verification reports and animation bundles. Existing IR/CLI artifacts remain in the database. The UI no longer asks users to select algorithm templates. Use `OJ_DATA_DIR` to choose another profile directory; `OJ_STYLE_CONFIG` can override appearance preferences separately. Do not put API keys in attachments or code.
+SQLite stores chat messages, attachment snapshots, tool calls, verification reports and animation bundles. Existing IR/CLI artifacts remain in the database. The UI no longer asks users to select algorithm templates. Use `OJ_DATA_DIR` to choose another profile directory; `OJ_STYLE_CONFIG` and `OJ_MODEL_CONFIG` can override the appearance and model settings files separately. The model settings file contains the API key in plain text and is restricted to the current user on Unix; do not share it or put API keys in attachments or code.
 
 ```sh
 cargo test --workspace
