@@ -475,6 +475,26 @@ fn failed_or_insufficient_checks_cannot_be_published_and_attachments_are_bounded
         )
         .is_err()
     );
+    assert_eq!(
+        chat::parse_turn(
+            "Here is the answer:\n```json\n{\"markdown\":\"ok\",\"done\":true}\n```\nThanks"
+        )
+        .unwrap()
+        .markdown,
+        "ok"
+    );
+    assert_eq!(
+        chat::parse_turn("prefix {\"markdown\":\"embedded\",\"done\":true} suffix")
+            .unwrap()
+            .markdown,
+        "embedded"
+    );
+    assert!(
+        !chat::parse_turn(r#"{"markdown":"intermediate"}"#)
+            .unwrap()
+            .done
+    );
+    assert!(chat::parse_turn(r#"{"tool_calls":[{"name":"sandbox.verify"}]}"#).is_ok());
     assert!(
         oj_agent::tools::invoke(
             "sandbox.verify",

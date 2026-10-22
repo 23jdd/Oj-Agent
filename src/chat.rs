@@ -67,24 +67,20 @@ pub struct AnimationBundle {
 #[serde(deny_unknown_fields)]
 pub struct ToolCall {
     pub name: String,
+    #[serde(default)]
     pub arguments: Value,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Turn {
+    #[serde(default)]
     pub markdown: String,
+    #[serde(default)]
     pub tool_calls: Vec<ToolCall>,
+    #[serde(default)]
     pub done: bool,
 }
-pub fn parse_turn(text: &str) -> Result<Turn> {
-    let text = text
-        .trim()
-        .strip_prefix("```json")
-        .unwrap_or(text.trim())
-        .trim();
-    let text = text.strip_suffix("```").unwrap_or(text).trim();
-    let turn: Turn = serde_json::from_str(text)
-        .map_err(|e| AppError::new("CHAT_RESPONSE_INVALID", "Agent", "Chat", e.to_string()))?;
+fn validate_turn(turn: Turn) -> Result<Turn> {
     if turn.markdown.len() > 100_000
         || turn.tool_calls.len() > 2
         || (turn.done && !turn.tool_calls.is_empty())
@@ -98,6 +94,74 @@ pub fn parse_turn(text: &str) -> Result<Turn> {
         ));
     }
     Ok(turn)
+}
+fn unfence(text: &str) -> Vec<&str> {
+    let mut candidates = vec![text];
+    if let Some(start) = text.find("```") {
+        let after = &text[start + 3..];
+        let after = after.strip_prefix("json").unwrap_or(after).trim_start();
+        if let Some(end) = after.rfind("```") {
+            candidates.push(after[..end].trim());
+        }
+        candidates.push(after.trim_end_matches("```").trim());
+    }
+    candidates
+}
+/// Extract the first balanced JSON object, ignoring prose or a trailing fence.
+fn first_object(text: &str) -> Option<&str> {
+    let start = text.find('{')?;
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (offset, ch) in text[start..].char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(&text[start..start + offset + ch.len_utf8()]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+pub fn parse_turn(text: &str) -> Result<Turn> {
+    let trimmed = text.trim();
+    let mut candidates = unfence(trimmed);
+    if let Some(object) = first_object(trimmed) {
+        candidates.push(object);
+    }
+    let mut last_error = None;
+    for candidate in candidates {
+        match serde_json::from_str::<Turn>(candidate) {
+            Ok(turn) => return validate_turn(turn),
+            Err(error) => last_error = Some(error),
+        }
+    }
+    Err(AppError::new(
+        "CHAT_RESPONSE_INVALID",
+        "Agent",
+        "Chat",
+        format!(
+            "Expected one JSON object with markdown, optional tool_calls and done: {}",
+            last_error
+                .map(|error| error.to_string())
+                .unwrap_or_else(|| "no JSON object found".into())
+        ),
+    ))
 }
 pub async fn respond(
     store: &mut SqliteStore,
