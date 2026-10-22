@@ -37,6 +37,7 @@ export component AppWindow inherits Window {
     callback reset-style;
     private property <bool> history-open: true;
     private property <bool> source-open: false;
+    private property <bool> modal-open: root.style-open || root.settings-open;
     in property <bool> busy: false;
     in property <bool> playing: false;
     in property <string> selected-session;
@@ -88,6 +89,7 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             height: Theme.titlebar-height; spacing: Theme.spacing-lg;
             WindowMoveArea {
+                visible: !root.modal-open;
                 horizontal-stretch: 1;
                 HorizontalLayout {
                     spacing: Theme.spacing-lg;
@@ -104,9 +106,9 @@ export component AppWindow inherits Window {
                 }
                 TouchArea { double-clicked => { root.maximized = !root.maximized; } }
             }
-            AppButton { text: "会话"; width: 80px; horizontal-stretch: 0; selected: root.history-open; clicked => { root.history-open = !root.history-open; } }
-            AppButton { text: "外观"; width: 80px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.settings-open = false; root.open-style(); } }
-            AppButton { text: "模型设置"; width: 128px; horizontal-stretch: 0; clicked => { root.style-open = false; root.settings-error = ""; root.settings-open = true; } }
+            AppButton { text: "会话"; width: 80px; horizontal-stretch: 0; visible: !root.modal-open; selected: root.history-open; clicked => { root.history-open = !root.history-open; } }
+            AppButton { text: "外观"; width: 80px; horizontal-stretch: 0; visible: !root.modal-open; enabled: !root.busy; clicked => { root.settings-open = false; root.settings-error = ""; root.open-style(); } }
+            AppButton { text: "模型设置"; width: 128px; horizontal-stretch: 0; visible: !root.modal-open; clicked => { root.style-open = false; root.settings-error = ""; root.settings-open = true; } }
             HorizontalLayout {
                 spacing: Theme.spacing-xs;
                 IconButton { text: "最小化"; icon: @image-url("icons/window-minimize.svg"); clicked => { root.minimized = true; } }
@@ -115,6 +117,7 @@ export component AppWindow inherits Window {
             }
         }
         HorizontalLayout {
+            visible: !root.modal-open;
             spacing: Theme.spacing-md; vertical-stretch: 1;
             if root.history-open: Panel {
                 width: Theme.sidebar-width;
@@ -227,7 +230,7 @@ export component AppWindow inherits Window {
         }
     }
     if root.style-open: Rectangle {
-        y: 2 * Theme.spacing-lg + Theme.titlebar-height;
+        y: Theme.spacing-lg + Theme.titlebar-height;
         height: root.height - self.y;
         background: Theme.background;
         TouchArea {}
@@ -245,7 +248,7 @@ export component AppWindow inherits Window {
         }
     }
     if root.settings-open: Rectangle {
-        y: 2 * Theme.spacing-lg + Theme.titlebar-height;
+        y: Theme.spacing-lg + Theme.titlebar-height;
         height: root.height - self.y;
         background: Theme.background;
         TouchArea {}

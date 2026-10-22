@@ -379,6 +379,7 @@ pub fn run() -> anyhow::Result<()> {
                 api_key: ui.get_api_key().into(),
             };
             if let Err(error) = config.validate() {
+                ui.set_style_open(false);
                 ui.set_settings_open(true);
                 show_error(&ui, error);
                 return;
