@@ -136,8 +136,21 @@ export component AppWindow inherits Window {
                     AppButton { text: "删除对话"; enabled: root.selected-session != "" && !root.busy; clicked => { root.delete-session(); } }
                 }
             }
-            if !root.animation-open: VerticalLayout {
-                Timer {
+            // Keep the chat instantiated while the animation page is open so its scroll
+            // area and composer keep their sizes when returning.
+            Rectangle {
+                visible: !root.animation-open;
+                vertical-stretch: 1;
+                min-height: 0px;
+                min-width: 0px;
+                max-width: root.animation-open ? 0px : 100000px;
+                horizontal-stretch: root.animation-open ? 0 : 1;
+                clip: true;
+                VerticalLayout {
+                    width: parent.width;
+                    height: parent.height;
+                    min-height: 0px;
+                    Timer {
                     interval: 16ms;
                     running: root.reveal-pending && !root.animation-open;
                     triggered => {
@@ -147,7 +160,7 @@ export component AppWindow inherits Window {
                 }
                 spacing: Theme.spacing-md;
                 message-scroll := ScrollView {
-                    min-height: 0px; vertical-stretch: 1;
+                    min-height: 0px; preferred-height: 0px; vertical-stretch: 1;
                     content-width: self.visible-width;
                     VerticalLayout {
                         padding: Theme.spacing-lg; spacing: Theme.spacing-md;
@@ -176,6 +189,7 @@ export component AppWindow inherits Window {
                             AppButton { text: "发送 ↑"; width: 96px; horizontal-stretch: 0; primary: true; enabled: !root.busy && (root.composer != "" || root.attachments.length > 0); clicked => { root.send-message(); } }
                         }
                     }
+                }
                 }
             }
             animation-page := AnimationPage {
