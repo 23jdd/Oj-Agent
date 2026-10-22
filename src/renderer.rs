@@ -28,6 +28,7 @@ pub struct SkiaRenderer;
 pub struct PreparedScene {
     pub timeline: Timeline,
     style: StyleConfig,
+    faces: Faces,
 }
 
 pub mod palette {
@@ -41,8 +42,20 @@ pub mod palette {
     pub const SEAL: Color = INK;
 }
 
-thread_local! { static FACES: RefCell<Option<(String, Typeface, Typeface)>> = const { RefCell::new(None) }; }
-fn font(family: &str, size: f32, bold: bool) -> Result<Font> {
+#[derive(Clone)]
+struct Faces {
+    regular: Typeface,
+    heavy: Typeface,
+}
+thread_local! { static FACES: RefCell<Option<(String, Faces)>> = const { RefCell::new(None) }; }
+fn faces(family: &str, file: &str) -> Result<Faces> {
+    if !file.is_empty() {
+        let face = crate::style::fonts::load(std::path::Path::new(file))?.face;
+        return Ok(Faces {
+            regular: face.clone(),
+            heavy: face,
+        });
+    }
     FACES.with(|cached| {
         if cached
             .borrow()
@@ -71,24 +84,26 @@ fn font(family: &str, size: f32, bold: bool) -> Result<Font> {
             let heavy = mgr
                 .match_family_style(regular.family_name(), skia_safe::FontStyle::bold())
                 .unwrap_or_else(|| regular.clone());
-            *cached.borrow_mut() = Some((family.to_owned(), regular, heavy));
+            *cached.borrow_mut() = Some((family.to_owned(), Faces { regular, heavy }));
         }
         let faces = cached.borrow();
-        let faces = faces.as_ref().expect("font faces initialized");
-        let mut font = Font::from_typeface(
-            if bold {
-                faces.2.clone()
-            } else {
-                faces.1.clone()
-            },
-            size,
-        );
-        font.set_edging(skia_safe::font::Edging::AntiAlias);
-        font.set_hinting(skia_safe::FontHinting::Normal);
-        font.set_subpixel(false);
-        font.set_baseline_snap(true);
-        Ok(font)
+        Ok(faces.as_ref().expect("font faces initialized").1.clone())
     })
+}
+fn font(faces: &Faces, size: f32, bold: bool) -> Font {
+    let mut font = Font::from_typeface(
+        if bold {
+            faces.heavy.clone()
+        } else {
+            faces.regular.clone()
+        },
+        size,
+    );
+    font.set_edging(skia_safe::font::Edging::AntiAlias);
+    font.set_hinting(skia_safe::FontHinting::Normal);
+    font.set_subpixel(false);
+    font.set_baseline_snap(true);
+    font
 }
 fn paint(color: Color, opacity: f32) -> Paint {
     let mut p = Paint::default();
@@ -110,6 +125,7 @@ fn blend(from: Color, to: Color, t: f32) -> Color {
 struct Painter<'a> {
     canvas: &'a Canvas,
     style: &'a StyleConfig,
+    faces: &'a Faces,
 }
 impl Painter<'_> {
     fn centered(&self, value: &str, b: Box2, size: f32, bold: bool, opacity: f32) -> Result<()> {
@@ -122,7 +138,7 @@ impl Painter<'_> {
         } else {
             size
         };
-        let mut f = font(&self.style.fonts.animation_family, size, bold)?;
+        let mut f = font(self.faces, size, bold);
         let measured = f.measure_str(value, None).0;
         if measured > (b.width - 12.).max(1.) {
             f.set_size(size * (b.width - 12.).max(1.) / measured);
@@ -157,7 +173,7 @@ impl Painter<'_> {
         let scale = canvas.local_to_device_as_3x3().scale_x().abs().max(0.01);
         let size = (size * self.style.fonts.animation_scale)
             .max(self.style.fonts.minimum_text_pixels / scale);
-        let f = font(&self.style.fonts.animation_family, size, bold)?;
+        let f = font(self.faces, size, bold);
         let (_, metrics) = f.metrics();
         let stride = size * self.style.fonts.line_height;
         let glyph_height = metrics.descent - metrics.ascent;
@@ -222,6 +238,7 @@ impl SkiaRenderer {
         Ok(PreparedScene {
             timeline: Timeline::new(animation)?,
             style: style.clone(),
+            faces: faces(&style.fonts.animation_family, &style.fonts.animation_file)?,
         })
     }
 }
@@ -277,6 +294,7 @@ impl PreparedScene {
         let painter = Painter {
             canvas,
             style: &self.style,
+            faces: &self.faces,
         };
         for track in &self.timeline.objects {
             let sample = track.sample(time);

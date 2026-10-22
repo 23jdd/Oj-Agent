@@ -1,4 +1,5 @@
 //! Validated, versioned appearance preferences shared by Slint and Skia.
+pub mod fonts;
 use crate::error::{AppError, Result};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
@@ -52,6 +53,9 @@ pub struct Fonts {
     pub ui_family: String,
     pub code_family: String,
     pub animation_family: String,
+    pub ui_file: String,
+    pub code_file: String,
+    pub animation_file: String,
     pub text_size: f32,
     pub label_size: f32,
     pub heading_size: f32,
@@ -75,6 +79,9 @@ impl Default for Fonts {
             }
             .into(),
             animation_family: family.into(),
+            ui_file: String::new(),
+            code_file: String::new(),
+            animation_file: String::new(),
             text_size: 14.,
             label_size: 13.,
             heading_size: 24.,
@@ -118,6 +125,27 @@ impl Default for Colors {
             success: Rgb([40, 114, 61]),
             danger: Rgb([169, 31, 45]),
         }
+    }
+}
+impl Colors {
+    /// Coordinated light palettes retain dark text and the Neobrutalism geometry.
+    pub fn preset(index: i32) -> Self {
+        let mut colors = Self::default();
+        match index {
+            1 => {
+                colors.accent = Rgb([139, 229, 189]);
+                colors.surface_hover = Rgb([201, 244, 224]);
+                colors.surface_active = Rgb([102, 210, 161]);
+                colors.focus = Rgb([20, 110, 80]);
+            }
+            2 => {
+                colors.accent = Rgb([196, 181, 253]);
+                colors.surface_hover = Rgb([232, 224, 255]);
+                colors.surface_active = Rgb([167, 139, 250]);
+            }
+            _ => {}
+        }
+        colors
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -191,6 +219,15 @@ impl StyleConfig {
                 return Err(invalid(format!("{name} must be between {min} and {max}.")));
             }
         }
+        for file in [
+            &self.fonts.ui_file,
+            &self.fonts.code_file,
+            &self.fonts.animation_file,
+        ] {
+            if file.len() > 4096 || file.chars().any(char::is_control) {
+                return Err(invalid("字体路径过长或包含无效字符。"));
+            }
+        }
         Ok(())
     }
     pub fn load(path: &Path) -> Result<Self> {
@@ -206,8 +243,18 @@ impl StyleConfig {
         if bytes.len() > 64 * 1024 {
             return Err(invalid("Style config exceeds 64 KiB."));
         }
-        let value: Self = serde_json::from_slice(&bytes).map_err(|e| invalid(e.to_string()))?;
+        let mut value: Self = serde_json::from_slice(&bytes).map_err(|e| invalid(e.to_string()))?;
         value.validate()?;
+        let parent = path.parent().unwrap_or(Path::new("."));
+        for file in [
+            &mut value.fonts.ui_file,
+            &mut value.fonts.code_file,
+            &mut value.fonts.animation_file,
+        ] {
+            if !file.is_empty() && Path::new(file).is_relative() {
+                *file = parent.join(&*file).to_string_lossy().into_owned();
+            }
+        }
         Ok(value)
     }
     /// Replace only after validation and a successful write, keeping the previous file on failure.

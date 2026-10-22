@@ -4,8 +4,8 @@ import { AnimationPage } from "animation-page.slint";
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 export { Theme } from "theme.slint";
-import { StyleEditor, StyleField } from "style-editor.slint";
-export { StyleField } from "style-editor.slint";
+import { StyleEditor, StyleField, StylePreview } from "style-editor.slint";
+export { StyleField, StylePreview } from "style-editor.slint";
 import { AppButton, IconButton, TextField, TextArea, SelectBox, AppCheckBox, SeekBar, SectionLabel, Divider, Panel } from "components.slint";
 
 export struct SessionItem { id: string, title: string, status: string }
@@ -29,10 +29,14 @@ export component AppWindow inherits Window {
     in property <[StyleField]> style-fields;
     in property <string> style-error;
     in property <string> style-path;
+    in property <StylePreview> style-preview;
+    in property <bool> style-font-pending;
     in property <string> model-config-path;
     in-out property <string> settings-error;
     callback open-style;
     callback edit-style(int, string);
+    callback choose-style-font(int);
+    callback style-preset(int);
     callback save-style;
     callback reset-style;
     private property <bool> history-open: true;
@@ -241,7 +245,10 @@ export component AppWindow inherits Window {
             height: parent.height - 2 * Theme.spacing-md;
             StyleEditor {
                 fields: root.style-fields; error: root.style-error; config-path: root.style-path;
+                preview: root.style-preview; font-pending: root.style-font-pending;
                 edited(index, value) => { root.edit-style(index, value); }
+                choose-font(index) => { root.choose-style-font(index); }
+                preset(index) => { root.style-preset(index); }
                 save => { root.save-style(); }
                 reset => { root.reset-style(); }
                 cancel => { root.style-open = false; }

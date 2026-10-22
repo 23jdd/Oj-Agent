@@ -1,15 +1,29 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { AppButton, TextField, SectionLabel, Divider } from "components.slint";
+import { AppButton, SelectBox, SectionLabel, Divider } from "components.slint";
+import { NumberStepper, ColorField } from "style-controls.slint";
 
-export struct StyleField { key: string, label: string, value: string, group: int, is-color: bool, swatch: color }
+export struct StyleField {
+    key: string, label: string, value: string, group: int,
+    is-color: bool, swatch: color, is-font: bool, file: string, system-family: string, render-family: string,
+    font-choices: [string], number: float, minimum: float, maximum: float, step: float
+}
+export struct StylePreview {
+    font-family: string, code-family: string, text-size: float, heading-size: float,
+    surface: color, background: color, text-color: color, accent: color, border: color,
+    border-width: float, radius: float, shadow: float
+}
 
 export component StyleEditor inherits Rectangle {
     in property <[StyleField]> fields;
+    in property <StylePreview> preview;
+    in property <bool> font-pending;
     in property <string> error;
     in property <string> config-path;
     private property <int> tab: 0;
     callback edited(int, string);
+    callback choose-font(int);
+    callback preset(int);
     callback save;
     callback reset;
     callback cancel;
@@ -17,7 +31,14 @@ export component StyleEditor inherits Rectangle {
     VerticalLayout {
         padding: Theme.spacing-xl; spacing: Theme.spacing-md;
         Text { text: "外观设置 / APPEARANCE"; color: Theme.text-primary; font-size: Theme.heading-size; font-weight: 700; }
-        SectionLabel { text: "保存后立即应用到界面、动画预览和导出。"; }
+        SectionLabel { text: "先选配色，再调整字体与尺寸；下方即时预览，保存后应用。"; }
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            SectionLabel { text: "配色预设"; width: 80px; horizontal-stretch: 0; }
+            AppButton { text: "经典黄"; enabled: !root.font-pending; clicked => { root.preset(0); } }
+            AppButton { text: "薄荷绿"; enabled: !root.font-pending; clicked => { root.preset(1); } }
+            AppButton { text: "浅紫"; enabled: !root.font-pending; clicked => { root.preset(2); } }
+        }
         HorizontalLayout {
             spacing: Theme.spacing-sm;
             AppButton { text: "字体"; selected: root.tab == 0; clicked => { root.tab = 0; } }
@@ -30,26 +51,87 @@ export component StyleEditor inherits Rectangle {
                 spacing: 0px;
                 for field[index] in root.fields: Rectangle {
                     visible: field.group == root.tab;
-                    height: self.visible ? Theme.control-height + Theme.spacing-sm : 0px;
-                    HorizontalLayout {
-                        padding-bottom: parent.visible ? Theme.spacing-sm : 0px;
-                        spacing: Theme.spacing-md;
-                        SectionLabel { text: field.label; width: 196px; horizontal-stretch: 0; }
-                        if field.is-color: Rectangle { width: 24px; height: 24px; background: field.swatch; border-width: Theme.border-width; border-color: Theme.border; }
-                        TextField { text: field.value; field-label: field.label; edited(value) => { root.edited(index, value); } }
+                    height: !self.visible ? 0px : field.is-font ? 112px : Theme.control-height + Theme.spacing-sm;
+                    VerticalLayout {
+                        padding-bottom: Theme.spacing-sm; spacing: Theme.spacing-xs;
+                        HorizontalLayout {
+                            spacing: Theme.spacing-md;
+                            SectionLabel { text: field.label; width: 196px; horizontal-stretch: 0; }
+                            if field.is-font: SelectBox {
+                                model: field.font-choices; current-index: 0; enabled: !root.font-pending;
+                                accessible-label: field.label;
+                                selected(value) => { root.edited(index, value); }
+                            }
+                            if field.is-font: AppButton {
+                                text: "本地文件…"; width: 112px; horizontal-stretch: 0; enabled: !root.font-pending;
+                                accessible-label: field.label + " 选择本地文件";
+                                clicked => { root.choose-font(index); }
+                            }
+                            if field.is-color: ColorField {
+                                value: field.value; label: field.label; swatch: field.swatch;
+                                edited(value) => { root.edited(index, value); }
+                            }
+                            if !field.is-color && !field.is-font: NumberStepper {
+                                value: field.value; number: field.number; label: field.label;
+                                minimum: field.minimum; maximum: field.maximum; step: field.step;
+                                edited(value) => { root.edited(index, value); }
+                            }
+                        }
+                        if field.is-font: Text {
+                            text: "算法演绎 · The quick brown fox · 0123456789";
+                            font-family: field.render-family; font-size: Theme.text-size; color: Theme.text-primary;
+                            overflow: elide;
+                        }
+                        if field.is-font: HorizontalLayout {
+                            spacing: Theme.spacing-sm;
+                            Text { text: field.file == "" ? "系统字体" : "本地字体：" + field.file; font-size: Theme.label-size; color: Theme.text-secondary; overflow: elide; vertical-alignment: center; horizontal-stretch: 1; }
+                            if field.file != "": AppButton {
+                                text: "改用系统"; width: 100px; height: 28px; horizontal-stretch: 0; enabled: !root.font-pending;
+                                clicked => { root.edited(index, field.system-family); }
+                            }
+                        }
                     }
                 }
             }
         }
-        if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Theme.label-size; wrap: word-wrap; max-height: 64px; }
+        Rectangle {
+            height: 112px; background: root.preview.background;
+            border-width: root.preview.border-width * 1px; border-color: root.preview.border;
+            border-radius: root.preview.radius * 1px;
+            HorizontalLayout {
+                padding: Theme.spacing-md; spacing: Theme.spacing-lg;
+                Rectangle {
+                    background: root.preview.surface;
+                    horizontal-stretch: 1;
+                    VerticalLayout {
+                        padding: Theme.spacing-xs; spacing: Theme.spacing-xs;
+                        Text { text: "对话与动画 · 预览"; font-family: root.preview.font-family; font-size: root.preview.heading-size * 1px; font-weight: 700; color: root.preview.text-color; overflow: elide; }
+                        Text { text: "清晰阅读，让思路自然展开。"; font-family: root.preview.font-family; font-size: root.preview.text-size * 1px; color: root.preview.text-color; overflow: elide; }
+                        Text { text: "solve([3, 1, 2]) → [1, 2, 3]"; font-family: root.preview.code-family; font-size: root.preview.text-size * 1px; color: root.preview.text-color; overflow: elide; }
+                    }
+                }
+                Rectangle {
+                    width: 112px; height: 48px;
+                    background: root.preview.border;
+                    Rectangle {
+                        width: parent.width - root.preview.shadow * 1px; height: parent.height - root.preview.shadow * 1px;
+                        background: root.preview.accent; border-width: root.preview.border-width * 1px; border-color: root.preview.border;
+                        border-radius: root.preview.radius * 1px;
+                        Text { text: "开始对话"; font-family: root.preview.font-family; font-size: root.preview.text-size * 1px; font-weight: 700; color: root.preview.text-color; horizontal-alignment: center; vertical-alignment: center; }
+                    }
+                }
+            }
+        }
+        if root.font-pending: SectionLabel { text: "正在选择和读取字体…"; }
+        if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Theme.label-size; wrap: word-wrap; max-height: 48px; }
         Divider {}
-        Text { text: "配置文件：" + root.config-path; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+        Text { text: "配置文件：" + root.config-path; color: Theme.text-secondary; font-size: Theme.label-size; overflow: elide; }
         HorizontalLayout {
             spacing: Theme.spacing-sm;
-            AppButton { text: "恢复默认"; clicked => { root.reset(); } }
+            AppButton { text: "恢复默认"; enabled: !root.font-pending; clicked => { root.reset(); } }
             Rectangle { horizontal-stretch: 1; }
             AppButton { text: "取消"; clicked => { root.cancel(); } }
-            AppButton { text: "保存并应用"; primary: true; clicked => { root.save(); } }
+            AppButton { text: "保存并应用"; primary: true; enabled: !root.font-pending; clicked => { root.save(); } }
         }
     }
 }

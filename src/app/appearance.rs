@@ -1,21 +1,69 @@
-use super::{AppWindow, State, StyleField, Theme, show_frame};
+use super::{AppWindow, State, StyleField, StylePreview, Theme, show_frame};
 use crate::{
     error::Result,
-    style::{Rgb, StyleConfig, invalid},
+    style::{Colors, Rgb, StyleConfig, fonts, invalid},
 };
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::{cell::RefCell, path::PathBuf, rc::Rc, sync::Arc};
+
+thread_local! { static FONT_ALIASES: RefCell<std::collections::HashMap<String, String>> = RefCell::default(); }
+fn display_family(family: &str, file: &str) -> slint::SharedString {
+    FONT_ALIASES.with(|aliases| {
+        aliases
+            .borrow()
+            .get(file)
+            .map(String::as_str)
+            .unwrap_or(family)
+            .into()
+    })
+}
+
+fn font_choices(selected: &str) -> ModelRc<slint::SharedString> {
+    static FAMILIES: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    let families = FAMILIES.get_or_init(|| {
+        let mut names = skia_safe::FontMgr::new().family_names().collect::<Vec<_>>();
+        names.sort();
+        names.dedup();
+        names
+    });
+    ModelRc::new(VecModel::from(
+        std::iter::once(selected.into())
+            .chain(
+                families
+                    .iter()
+                    .filter(|name| *name != selected)
+                    .map(|name| name.as_str().into()),
+            )
+            .collect::<Vec<_>>(),
+    ))
+}
+
+fn number_range(key: &str) -> (f32, f32, f32) {
+    match key {
+        "fonts.text_size" => (12., 18., 1.),
+        "fonts.label_size" => (12., 16., 1.),
+        "fonts.heading_size" => (18., 28., 1.),
+        "fonts.animation_scale" => (0.8, 1.6, 0.1),
+        "fonts.minimum_text_pixels" => (12., 18., 1.),
+        "fonts.line_height" => (1.2, 1.8, 0.05),
+        "geometry.border_width" => (1., 3., 1.),
+        "geometry.shadow_offset" => (0., 6., 1.),
+        "geometry.radius" => (0., 8., 1.),
+        "geometry.control_height" => (36., 48., 4.),
+        _ => (0., 0., 0.),
+    }
+}
 
 const FIELDS: &[(&str, &str, i32)] = &[
     ("fonts.ui_family", "界面字体", 0),
     ("fonts.code_family", "代码字体", 0),
     ("fonts.animation_family", "动画字体", 0),
-    ("fonts.text_size", "正文字号 / 12–18 px", 0),
-    ("fonts.label_size", "标签字号 / 12–16 px", 0),
-    ("fonts.heading_size", "标题字号 / 18–28 px", 0),
-    ("fonts.animation_scale", "动画字号倍率 / 0.8–1.6", 0),
-    ("fonts.minimum_text_pixels", "动画最小文字 / 12–18 px", 0),
-    ("fonts.line_height", "动画行高 / 1.2–1.8", 0),
+    ("fonts.text_size", "正文字号 / 12–18 px", 2),
+    ("fonts.label_size", "标签字号 / 12–16 px", 2),
+    ("fonts.heading_size", "标题字号 / 18–28 px", 2),
+    ("fonts.animation_scale", "动画字号倍率 / 0.8–1.6", 2),
+    ("fonts.minimum_text_pixels", "动画最小文字 / 12–18 px", 2),
+    ("fonts.line_height", "动画行高 / 1.2–1.8", 2),
     ("colors.background", "背景", 1),
     ("colors.surface", "面板 / 画布", 1),
     ("colors.text_primary", "主要文字", 1),
@@ -36,6 +84,7 @@ const FIELDS: &[(&str, &str, i32)] = &[
 ];
 pub fn fields(style: &StyleConfig) -> ModelRc<StyleField> {
     let json = serde_json::to_value(style).expect("validated style serializes");
+    let defaults = serde_json::to_value(StyleConfig::default()).expect("default style serializes");
     ModelRc::new(VecModel::from(
         FIELDS
             .iter()
@@ -48,11 +97,37 @@ pub fn fields(style: &StyleConfig) -> ModelRc<StyleField> {
                         .map(|number| (number as f32).to_string())
                         .unwrap_or_else(|| value.to_string())
                 });
+                let is_font = name.ends_with("_family");
+                let file = if is_font {
+                    json[section][name.replace("_family", "_file")]
+                        .as_str()
+                        .unwrap_or("")
+                } else {
+                    ""
+                };
+                let (minimum, maximum, step) = number_range(key);
                 StyleField {
                     key: (*key).into(),
                     label: (*label).into(),
                     group: *group,
                     is_color: *group == 1,
+                    is_font,
+                    file: file.into(),
+                    render_family: display_family(&value, file),
+                    system_family: if is_font {
+                        defaults[section][name].as_str().unwrap().into()
+                    } else {
+                        "".into()
+                    },
+                    font_choices: if is_font {
+                        font_choices(&value)
+                    } else {
+                        ModelRc::default()
+                    },
+                    minimum,
+                    maximum,
+                    step,
+                    number: value.parse().unwrap_or(0.),
                     swatch: Rgb::parse(&value).unwrap_or(Rgb([255, 255, 255])).slint(),
                     value: value.into(),
                 }
@@ -85,15 +160,116 @@ fn parse(fields: &ModelRc<StyleField>) -> Result<StyleConfig> {
         } else {
             serde_json::Value::String(value.into())
         };
+        if name.ends_with("_family") {
+            json[section][name.replace("_family", "_file")] =
+                serde_json::Value::String(row.file.to_string());
+        }
     }
     let style: StyleConfig = serde_json::from_value(json).map_err(|e| invalid(e.to_string()))?;
     style.validate()?;
     Ok(style)
 }
+fn preview(ui: &AppWindow, style: &StyleConfig) {
+    ui.set_style_preview(StylePreview {
+        font_family: display_family(&style.fonts.ui_family, &style.fonts.ui_file),
+        code_family: display_family(&style.fonts.code_family, &style.fonts.code_file),
+        text_size: style.fonts.text_size,
+        heading_size: style.fonts.heading_size,
+        surface: style.colors.surface.slint(),
+        background: style.colors.background.slint(),
+        text_color: style.colors.text_primary.slint(),
+        accent: style.colors.accent.slint(),
+        border: style.colors.border.slint(),
+        border_width: style.geometry.border_width,
+        radius: style.geometry.radius,
+        shadow: style.geometry.shadow_offset,
+    });
+}
+fn draft_changed(ui: &AppWindow) {
+    match parse(&ui.get_style_fields()) {
+        Ok(style) => {
+            preview(ui, &style);
+            ui.set_style_error("".into());
+        }
+        Err(error) => ui.set_style_error(error.to_string().into()),
+    }
+}
+
+fn register(file: &str, font: &fonts::LocalFont) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    use slint::fontique_011::{fontique, shared_collection};
+    thread_local! { static REGISTERED: RefCell<std::collections::HashSet<[u8; 32]>> = RefCell::default(); }
+    let hash: [u8; 32] = Sha256::digest(&font.bytes).into();
+    // Isolate local files from system families and from other files with the same family name.
+    // Registering a draft must not change the active UI's fonts before Save.
+    let alias = format!("OJLocal-{:x}", Sha256::digest(&font.bytes));
+    FONT_ALIASES.with(|aliases| {
+        aliases.borrow_mut().insert(file.into(), alias.clone());
+    });
+    if REGISTERED.with(|fonts| fonts.borrow().contains(&hash)) {
+        return Ok(());
+    }
+    let blob = fontique::Blob::new(Arc::new(font.bytes.clone()));
+    let info = fontique::FontInfoOverride {
+        family_name: Some(&alias),
+        ..Default::default()
+    };
+    if shared_collection()
+        .register_fonts(blob, Some(info))
+        .is_empty()
+    {
+        return Err(invalid("界面无法加载此字体，请选择其他字体文件。"));
+    }
+    REGISTERED.with(|fonts| {
+        fonts.borrow_mut().insert(hash);
+    });
+    Ok(())
+}
+
+/// Load on the UI thread before applying family names. Return errors instead of silently falling back.
+pub fn load_fonts(style: &mut StyleConfig) -> Result<()> {
+    for (file, family) in [
+        (&style.fonts.ui_file, &mut style.fonts.ui_family),
+        (&style.fonts.code_file, &mut style.fonts.code_family),
+        (
+            &style.fonts.animation_file,
+            &mut style.fonts.animation_family,
+        ),
+    ] {
+        if !file.is_empty() {
+            let font = fonts::load(std::path::Path::new(file))?;
+            register(file, &font)?;
+            *family = font.family;
+        }
+    }
+    Ok(())
+}
+
+fn save_fonts(style: &mut StyleConfig, config: &std::path::Path) -> Result<()> {
+    for (file, family) in [
+        (&mut style.fonts.ui_file, &mut style.fonts.ui_family),
+        (&mut style.fonts.code_file, &mut style.fonts.code_family),
+        (
+            &mut style.fonts.animation_file,
+            &mut style.fonts.animation_family,
+        ),
+    ] {
+        if !file.is_empty() {
+            let font = fonts::load(std::path::Path::new(file))?;
+            *file = font.store(config)?.to_string_lossy().into_owned();
+            register(file, &font)?;
+            *family = font.family;
+        }
+    }
+    Ok(())
+}
 pub fn apply(ui: &AppWindow, style: &StyleConfig) {
     let theme = ui.global::<Theme>();
-    theme.set_font_family(style.fonts.ui_family.clone().into());
-    theme.set_code_font_family(style.fonts.code_family.clone().into());
+    theme.set_font_family(display_family(&style.fonts.ui_family, &style.fonts.ui_file));
+    theme.set_code_font_family(display_family(
+        &style.fonts.code_family,
+        &style.fonts.code_file,
+    ));
     theme.set_text_size(style.fonts.text_size);
     theme.set_label_size(style.fonts.label_size);
     theme.set_heading_size(style.fonts.heading_size);
@@ -122,6 +298,7 @@ pub fn bind(ui: &AppWindow, state: Rc<RefCell<State>>, path: PathBuf) {
     ui.on_open_style(move || {
         if let Some(ui) = weak.upgrade() {
             ui.set_style_fields(fields(&current.borrow().style));
+            preview(&ui, &current.borrow().style);
             ui.set_style_error("".into());
             ui.set_style_open(true);
         }
@@ -130,7 +307,7 @@ pub fn bind(ui: &AppWindow, state: Rc<RefCell<State>>, path: PathBuf) {
     ui.on_reset_style(move || {
         if let Some(ui) = weak.upgrade() {
             ui.set_style_fields(fields(&StyleConfig::default()));
-            ui.set_style_error("".into());
+            draft_changed(&ui);
         }
     });
     let weak = ui.as_weak();
@@ -142,15 +319,90 @@ pub fn bind(ui: &AppWindow, state: Rc<RefCell<State>>, path: PathBuf) {
                     row.swatch = Rgb::parse(&value).map(Rgb::slint).unwrap_or(row.swatch);
                 }
                 row.value = value;
+                row.number = row.value.parse().unwrap_or(row.number);
+                if row.is_font {
+                    row.file = "".into();
+                    row.render_family = row.value.clone();
+                    row.font_choices = font_choices(&row.value);
+                }
                 model.set_row_data(index as usize, row);
-                ui.set_style_error("".into());
+                draft_changed(&ui);
             }
         }
     });
     let weak = ui.as_weak();
+    ui.on_style_preset(move |index| {
+        if let Some(ui) = weak.upgrade() {
+            // Replace only palette rows, retaining fonts, dimensions and unfinished edits.
+            let model = ui.get_style_fields();
+            let palette = fields(&StyleConfig {
+                colors: Colors::preset(index),
+                ..Default::default()
+            });
+            for (index, row) in palette.iter().enumerate() {
+                if row.is_color {
+                    model.set_row_data(index, row);
+                }
+            }
+            draft_changed(&ui);
+        }
+    });
+    let weak = ui.as_weak();
+    ui.on_choose_style_font(move |index| {
+        let Some(ui) = weak.upgrade() else {
+            return;
+        };
+        if ui.get_style_font_pending() {
+            return;
+        }
+        ui.set_style_font_pending(true);
+        ui.set_style_error("".into());
+        let weak = ui.as_weak();
+        std::thread::spawn(move || {
+            let result = rfd::FileDialog::new()
+                .set_title("选择本地字体")
+                .add_filter("字体文件", &["ttf", "otf", "ttc"])
+                .pick_file()
+                .map(|path| fonts::load(&path).map(|font| (path, font)));
+            let _ = weak.upgrade_in_event_loop(move |ui| {
+                ui.set_style_font_pending(false);
+                if !ui.get_style_open() {
+                    return;
+                }
+                let Some(result) = result else {
+                    return;
+                };
+                let result = result.and_then(|(path, font)| {
+                    register(&path.to_string_lossy(), &font)?;
+                    Ok((path, font.family))
+                });
+                match result {
+                    Ok((path, family)) => {
+                        let model = ui.get_style_fields();
+                        if let Some(mut row) =
+                            model.row_data(index as usize).filter(|row| row.is_font)
+                        {
+                            row.value = family.into();
+                            row.font_choices = font_choices(&row.value);
+                            row.file = path.to_string_lossy().into_owned().into();
+                            row.render_family = display_family(&row.value, &row.file);
+                            model.set_row_data(index as usize, row);
+                            draft_changed(&ui);
+                        }
+                    }
+                    Err(error) => ui.set_style_error(error.to_string().into()),
+                }
+            });
+        });
+    });
+    let weak = ui.as_weak();
     ui.on_save_style(move || {
         if let Some(ui) = weak.upgrade() {
-            let result = parse(&ui.get_style_fields()).and_then(|style| {
+            if ui.get_style_font_pending() {
+                return;
+            }
+            let result = parse(&ui.get_style_fields()).and_then(|mut style| {
+                save_fonts(&mut style, &path)?;
                 style.save(&path)?;
                 Ok(style)
             });

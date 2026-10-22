@@ -1,0 +1,62 @@
+import { Theme } from "theme.slint";
+import { AppButton, TextField } from "components.slint";
+
+export component NumberStepper inherits HorizontalLayout {
+    in property <string> value;
+    in property <string> label;
+    in property <float> number;
+    in property <float> minimum;
+    in property <float> maximum;
+    in property <float> step;
+    callback edited(string);
+    spacing: Theme.spacing-sm;
+    AppButton {
+        text: "−"; max-width: Theme.control-height; min-width: Theme.control-height;
+        accessible-label: root.label + " 减小";
+        enabled: root.number > root.minimum;
+        clicked => { root.edited("" + max(root.minimum, round((root.number - root.step) * 100) / 100)); }
+    }
+    TextField { text: root.value; field-label: root.label; input-type: decimal; edited(value) => { root.edited(value); } }
+    AppButton {
+        text: "+"; max-width: Theme.control-height; min-width: Theme.control-height;
+        accessible-label: root.label + " 增大";
+        enabled: root.number < root.maximum;
+        clicked => { root.edited("" + min(root.maximum, round((root.number + root.step) * 100) / 100)); }
+    }
+}
+
+export component ColorField inherits HorizontalLayout {
+    in property <string> value;
+    in property <string> label;
+    in property <color> swatch;
+    callback edited(string);
+    spacing: Theme.spacing-sm;
+    Rectangle { width: Theme.control-height; height: Theme.control-height; background: root.swatch; border-width: Theme.border-width; border-color: Theme.border; }
+    TextField { text: root.value; field-label: root.label; edited(value) => { root.edited(value); } }
+    AppButton { text: "选色"; width: 80px; horizontal-stretch: 0; clicked => { palette.show(); } }
+    palette := PopupWindow {
+        y: Theme.control-height + Theme.spacing-xs;
+        width: 400px; height: 112px;
+        Rectangle {
+            background: Theme.surface; border-width: Theme.border-width; border-color: Theme.border;
+            VerticalLayout {
+                padding: Theme.spacing-sm; spacing: Theme.spacing-sm;
+                for row in [0, 1]: HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+                    for col in [0, 1, 2, 3, 4]: AppButton {
+                        property <int> index: row * 5 + col;
+                        text: Theme.color-choices[self.index].value;
+                        accessible-label: root.label + " " + self.text;
+                        Rectangle {
+                            x: Theme.spacing-sm; y: Theme.spacing-sm;
+                            width: parent.width - 2 * Theme.spacing-sm - Theme.shadow-offset;
+                            height: parent.height - 2 * Theme.spacing-sm - Theme.shadow-offset;
+                            background: Theme.color-choices[parent.index].tint;
+                        }
+                        clicked => { root.edited(Theme.color-choices[self.index].value); palette.close(); }
+                    }
+                }
+            }
+        }
+    }
+}

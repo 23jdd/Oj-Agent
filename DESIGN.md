@@ -32,7 +32,10 @@ palette and button treatment guide the native Slint components; React is not use
   Use the shared font-family token and keep small labels readable.
 - The **外观** editor configures shared font, color and geometry tokens. Keep
   editable values in a draft until validated and saved; retain the default
-  Neobrutalism appearance. See `docs/STYLE.md`.
+  Neobrutalism appearance. Offer coordinated palette presets, installed-font
+  dropdowns, local font-file import, bounded numeric steppers and clickable color
+  swatches. Show a draft sample without restyling the editor before save.
+  See `docs/STYLE.md`.
 - Verify minimize/restore, live resizing, playback, seeking, input and model
   settings on a native window before considering UI work complete.
 

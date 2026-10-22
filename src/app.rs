@@ -295,7 +295,10 @@ pub fn run() -> anyhow::Result<()> {
         .map(PathBuf::from)
         .unwrap_or(data_dir()?.join("style.json"));
     let (style, style_error) = match StyleConfig::load(&style_path) {
-        Ok(style) => (style, None),
+        Ok(mut style) => match appearance::load_fonts(&mut style) {
+            Ok(()) => (style, None),
+            Err(error) => (StyleConfig::default(), Some(error)),
+        },
         Err(error) => (StyleConfig::default(), Some(error)),
     };
     appearance::apply(&ui, &style);

@@ -1,4 +1,12 @@
+export struct ThemeColor { value: string, tint: color }
 export global Theme {
+    out property <[ThemeColor]> color-choices: [
+        {value: "#ffdb33", tint: #ffdb33}, {value: "#8be5bd", tint: #8be5bd},
+        {value: "#c4b5fd", tint: #c4b5fd}, {value: "#93c5fd", tint: #93c5fd},
+        {value: "#fda4af", tint: #fda4af}, {value: "#ffffff", tint: #ffffff},
+        {value: "#f5f5f5", tint: #f5f5f5}, {value: "#5a5a5a", tint: #5a5a5a},
+        {value: "#000000", tint: #000000}, {value: "#28723d", tint: #28723d}
+    ];
     in-out property <string> code-font-family: "Consolas";
     in-out property <string> font-family: "Microsoft YaHei UI";
     in-out property <color> background: #f5f5f5;

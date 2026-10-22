@@ -30,7 +30,7 @@ schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 skia-safe = "0.153.3"
-slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-skia", "compat-1-2"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-skia", "compat-1-2", "unstable-fontique-011"] }
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "sync"] }
 uuid = { version = "1", features = ["v4", "serde"] }
