@@ -14,15 +14,12 @@ use std::{
     cell::RefCell,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
 slint::include_modules!();
 mod appearance;
+mod jobs;
 mod preview;
 
 pub fn data_dir() -> Result<PathBuf> {
@@ -51,10 +48,10 @@ enum Event {
         epoch: u64,
         frame: Result<preview::Pixels>,
     },
-    Progress(String),
-    ChatFinished(Result<()>),
+    Progress(uuid::Uuid, String),
+    ChatFinished(uuid::Uuid, Result<()>),
     Attached(Result<Vec<Attachment>>),
-    Exported(Result<PathBuf>),
+    Exported(uuid::Uuid, Result<PathBuf>),
 }
 struct State {
     animation: Option<Arc<AnimationIr>>,
@@ -68,7 +65,7 @@ struct State {
     preview_size: Option<RasterSize>,
     pending_resize: Option<(RasterSize, Instant)>,
     player: Player,
-    cancel: Arc<AtomicBool>,
+    jobs: jobs::Jobs,
     last: Instant,
     last_frame: f64,
     rx: mpsc::Receiver<Event>,
@@ -178,8 +175,10 @@ fn clear_chat(ui: &AppWindow, state: &mut State) {
     ui.set_selected_session("".into());
     ui.set_composer("".into());
     ui.set_animation_open(false);
+    ui.set_playing(false);
     ui.set_messages(Default::default());
     ui.set_error_text("".into());
+    ui.set_status_text("就绪".into());
     refresh_attachments(ui, state);
 }
 fn pick_files(ui: &AppWindow, state: &mut State) {
@@ -285,220 +284,17 @@ fn update_preview_size(ui: &AppWindow, state: &mut State) {
     state.last_frame = -1.;
 }
 
-pub fn run() -> anyhow::Result<()> {
-    slint::BackendSelector::new()
-        .backend_name("winit".into())
-        .renderer_name("skia".into())
-        .select()?;
-    let ui = AppWindow::new()?;
-    let style_path = std::env::var_os("OJ_STYLE_CONFIG")
-        .map(PathBuf::from)
-        .unwrap_or(data_dir()?.join("style.json"));
-    let (style, style_error) = match StyleConfig::load(&style_path) {
-        Ok(mut style) => match appearance::load_fonts(&mut style) {
-            Ok(()) => (style, None),
-            Err(error) => (StyleConfig::default(), Some(error)),
-        },
-        Err(error) => (StyleConfig::default(), Some(error)),
-    };
-    appearance::apply(&ui, &style);
-    let model_path = std::env::var_os("OJ_MODEL_CONFIG")
-        .map(PathBuf::from)
-        .unwrap_or(data_dir()?.join("model.json"));
-    let (model, model_error) = match ModelSettings::load(&model_path) {
-        Ok(model) => (model, None),
-        Err(error) => (ModelSettings::default(), Some(error)),
-    };
-    ui.set_provider_index(provider_index(&model.provider));
-    ui.set_model_name(model.model.clone().into());
-    ui.set_endpoint(model.endpoint.clone().into());
-    ui.set_api_key(model.api_key.clone().into());
-    ui.set_model_config_path(model_path.display().to_string().into());
-    let db = database_path()?;
-    SqliteStore::open(&db)?.recover_interrupted()?;
-    refresh_sessions(&ui, &db)?;
-    let (tx, rx) = mpsc::channel();
-    let state = Rc::new(RefCell::new(State {
-        animation: None,
-        bundle: None,
-        animation_artifact: String::new(),
-        attachments: vec![],
-        file_pending: false,
-        preview: preview::PreviewWorker::new(tx.clone()),
-        preview_epoch: 0,
-        style: Arc::new(style),
-        preview_size: None,
-        pending_resize: None,
-        player: Player::default(),
-        cancel: Arc::new(AtomicBool::new(false)),
-        last: Instant::now(),
-        last_frame: -1.,
-        rx,
-        tx,
-        db,
-    }));
-    appearance::bind(&ui, state.clone(), style_path);
-    if let Some(error) = style_error.or(model_error) {
-        show_error(&ui, error);
-    }
+fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
     {
         let weak = ui.as_weak();
-        let path = model_path.clone();
-        ui.on_save_model(move || {
-            if let Some(ui) = weak.upgrade() {
-                let settings = ModelSettings {
-                    version: crate::settings::VERSION,
-                    provider: provider_from_index(ui.get_provider_index()),
-                    model: ui.get_model_name().into(),
-                    endpoint: ui.get_endpoint().into(),
-                    api_key: ui.get_api_key().into(),
-                };
-                match settings.save(&path) {
-                    Ok(()) => {
-                        ui.set_settings_open(false);
-                        ui.set_settings_error("".into());
-                        ui.set_error_text("".into());
-                        ui.set_status_text("模型配置已保存".into());
-                    }
-                    Err(error) => ui.set_settings_error(error.to_string().into()),
-                }
-            }
-        });
-    }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
-        ui.on_send_message(move || {
-            let Some(ui) = weak.upgrade() else {
-                return;
-            };
-            if ui.get_busy() {
-                return;
-            }
-            let config = ModelConfig {
-                provider: provider_from_index(ui.get_provider_index()),
-                model: ui.get_model_name().into(),
-                endpoint: ui.get_endpoint().into(),
-                api_key: ui.get_api_key().into(),
-            };
-            if let Err(error) = config.validate() {
-                ui.set_style_open(false);
-                ui.set_settings_open(true);
-                show_error(&ui, error);
-                return;
-            }
-            let mut s = state.borrow_mut();
-            let text = ui.get_composer().trim().to_string();
-            if text.is_empty() && s.attachments.is_empty() {
-                return;
-            }
-            if text.len() > 100_000 {
-                show_error(&ui, AppError::validation("Chat", "Message exceeds 100 KB."));
-                return;
-            }
-            let result = (|| {
-                let title = session_label(&text).chars().take(32).collect::<String>();
-                let message = chat::Message::new(
-                    "user",
-                    if text.is_empty() {
-                        "请查看附件。".into()
-                    } else {
-                        text
-                    },
-                    s.attachments.clone(),
-                );
-                if serde_json::to_vec(&message).map_err(|e|AppError::io("Chat",e))?.len() > 900_000 {
-                    return Err(AppError::new("CHAT_CONTEXT_LIMIT","Input","Chat","This message and its attachments are too large; remove or shorten some files."));
-                }
-                let mut store = SqliteStore::open(&s.db)?;
-                let session = if ui.get_selected_session().is_empty() {
-                    store.create_chat(if title.is_empty() { "附件讨论" } else { &title })?
-                } else { ui.get_selected_session().to_string() };
-                store.append_message(&session, &message)?;
-                store.checkpoint(&session, "Chat", "processing")?;
-                ui.set_selected_session(session.clone().into());
-                Ok(session)
-            })();
-            let session = match result {
-                Ok(session) => session,
-                Err(error) => {
-                    show_error(&ui, error);
-                    return;
-                }
-            };
-            s.attachments.clear();
-            refresh_attachments(&ui, &s);
-            ui.set_composer("".into());
-            ui.set_error_text("".into());
-            ui.set_busy(true);
-            ui.set_status_text("AI 正在回复…".into());
-            let _ = refresh_chat(&ui, &s);
-            let _ = refresh_sessions(&ui, &s.db);
-            s.cancel = Arc::new(AtomicBool::new(false));
-            let cancel = s.cancel.clone();
-            let tx = s.tx.clone();
-            let db = s.db.clone();
-            std::thread::spawn(move || {
-                let result = (|| {
-                    let mut store = SqliteStore::open(&db)?;
-                    let runtime =
-                        tokio::runtime::Runtime::new().map_err(|e| AppError::io("Chat", e))?;
-                    let result = runtime.block_on(chat::respond(
-                        &mut store,
-                        &session,
-                        &config,
-                        cancel,
-                        |p| {
-                            let _ = tx.send(Event::Progress(p.into()));
-                        },
-                    ));
-                    if let Err(error) = &result {
-                        let _ = store.record_error(&session, error);
-                    }
-                    result.map(|_| ())
-                })();
-                let _ = tx.send(Event::ChatFinished(result));
-            });
-        });
-    }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
-        ui.on_attach_files(move || {
-            if let Some(ui) = weak.upgrade() {
-                pick_files(&ui, &mut state.borrow_mut());
-            }
-        });
-    }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
-        ui.on_composer_edited(move || {
-            if let Some(ui) = weak.upgrade() {
-                let value = ui.get_composer();
-                if let Some(prefix) = value.strip_suffix('@')
-                    && prefix.chars().last().is_none_or(char::is_whitespace)
-                {
-                    pick_files(&ui, &mut state.borrow_mut());
-                }
-            }
-        });
-    }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
-        ui.on_remove_attachment(move |id| {
-            if let Some(ui) = weak.upgrade() {
-                let mut s = state.borrow_mut();
-                s.attachments.retain(|a| a.id != id.as_str());
-                refresh_attachments(&ui, &s);
-            }
-        });
-    }
-    {
         let state = state.clone();
         ui.on_cancel(move || {
-            state.borrow().cancel.store(true, Ordering::Relaxed);
+            state.borrow_mut().jobs.stop();
+            if let Some(ui) = weak.upgrade() {
+                ui.set_busy(false);
+                ui.set_error_text("".into());
+                ui.set_status_text("已停止，可以继续对话或切换会话".into());
+            }
         });
     }
     {
@@ -616,6 +412,222 @@ pub fn run() -> anyhow::Result<()> {
             }
         });
     }
+}
+
+pub fn run() -> anyhow::Result<()> {
+    slint::BackendSelector::new()
+        .backend_name("winit".into())
+        .renderer_name("skia".into())
+        .select()?;
+    let ui = AppWindow::new()?;
+    let style_path = std::env::var_os("OJ_STYLE_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or(data_dir()?.join("style.json"));
+    let (style, style_error) = match StyleConfig::load(&style_path) {
+        Ok(mut style) => match appearance::load_fonts(&mut style) {
+            Ok(()) => (style, None),
+            Err(error) => (StyleConfig::default(), Some(error)),
+        },
+        Err(error) => (StyleConfig::default(), Some(error)),
+    };
+    appearance::apply(&ui, &style);
+    let model_path = std::env::var_os("OJ_MODEL_CONFIG")
+        .map(PathBuf::from)
+        .unwrap_or(data_dir()?.join("model.json"));
+    let (model, model_error) = match ModelSettings::load(&model_path) {
+        Ok(model) => (model, None),
+        Err(error) => (ModelSettings::default(), Some(error)),
+    };
+    ui.set_provider_index(provider_index(&model.provider));
+    ui.set_model_name(model.model.clone().into());
+    ui.set_endpoint(model.endpoint.clone().into());
+    ui.set_api_key(model.api_key.clone().into());
+    ui.set_model_config_path(model_path.display().to_string().into());
+    let db = database_path()?;
+    SqliteStore::open(&db)?.recover_interrupted()?;
+    refresh_sessions(&ui, &db)?;
+    let (tx, rx) = mpsc::channel();
+    let state = Rc::new(RefCell::new(State {
+        animation: None,
+        bundle: None,
+        animation_artifact: String::new(),
+        attachments: vec![],
+        file_pending: false,
+        preview: preview::PreviewWorker::new(tx.clone()),
+        preview_epoch: 0,
+        style: Arc::new(style),
+        preview_size: None,
+        pending_resize: None,
+        player: Player::default(),
+        jobs: jobs::Jobs::default(),
+        last: Instant::now(),
+        last_frame: -1.,
+        rx,
+        tx,
+        db,
+    }));
+    appearance::bind(&ui, state.clone(), style_path);
+    if let Some(error) = style_error.or(model_error) {
+        show_error(&ui, error);
+    }
+    {
+        let weak = ui.as_weak();
+        let path = model_path.clone();
+        ui.on_save_model(move || {
+            if let Some(ui) = weak.upgrade() {
+                let settings = ModelSettings {
+                    version: crate::settings::VERSION,
+                    provider: provider_from_index(ui.get_provider_index()),
+                    model: ui.get_model_name().into(),
+                    endpoint: ui.get_endpoint().into(),
+                    api_key: ui.get_api_key().into(),
+                };
+                match settings.save(&path) {
+                    Ok(()) => {
+                        ui.set_settings_open(false);
+                        ui.set_settings_error("".into());
+                        ui.set_error_text("".into());
+                        ui.set_status_text("模型配置已保存".into());
+                    }
+                    Err(error) => ui.set_settings_error(error.to_string().into()),
+                }
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_send_message(move || {
+            let Some(ui) = weak.upgrade() else {
+                return;
+            };
+            if ui.get_busy() {
+                return;
+            }
+            let config = ModelConfig {
+                provider: provider_from_index(ui.get_provider_index()),
+                model: ui.get_model_name().into(),
+                endpoint: ui.get_endpoint().into(),
+                api_key: ui.get_api_key().into(),
+            };
+            if let Err(error) = config.validate() {
+                ui.set_style_open(false);
+                ui.set_settings_open(true);
+                show_error(&ui, error);
+                return;
+            }
+            let mut s = state.borrow_mut();
+            let text = ui.get_composer().trim().to_string();
+            if text.is_empty() && s.attachments.is_empty() {
+                return;
+            }
+            if text.len() > 100_000 {
+                show_error(&ui, AppError::validation("Chat", "Message exceeds 100 KB."));
+                return;
+            }
+            let result = (|| {
+                let title = session_label(&text).chars().take(32).collect::<String>();
+                let message = chat::Message::new(
+                    "user",
+                    if text.is_empty() {
+                        "请查看附件。".into()
+                    } else {
+                        text
+                    },
+                    s.attachments.clone(),
+                );
+                if serde_json::to_vec(&message).map_err(|e|AppError::io("Chat",e))?.len() > 900_000 {
+                    return Err(AppError::new("CHAT_CONTEXT_LIMIT","Input","Chat","This message and its attachments are too large; remove or shorten some files."));
+                }
+                let mut store = SqliteStore::open(&s.db)?;
+                let session = if ui.get_selected_session().is_empty() {
+                    store.create_chat(if title.is_empty() { "附件讨论" } else { &title })?
+                } else { ui.get_selected_session().to_string() };
+                store.append_message(&session, &message)?;
+                store.checkpoint(&session, "Chat", "processing")?;
+                ui.set_selected_session(session.clone().into());
+                Ok((session, message.id))
+            })();
+            let (session, request) = match result {
+                Ok(session) => session,
+                Err(error) => {
+                    show_error(&ui, error);
+                    return;
+                }
+            };
+            s.attachments.clear();
+            refresh_attachments(&ui, &s);
+            ui.set_composer("".into());
+            ui.set_error_text("".into());
+            ui.set_busy(true);
+            ui.set_status_text("AI 正在回复…".into());
+            let _ = refresh_chat(&ui, &s);
+            let _ = refresh_sessions(&ui, &s.db);
+            let job = s.jobs.begin();
+            let cancel = job.cancel;
+            let job_id = job.id;
+            let tx = s.tx.clone();
+            let db = s.db.clone();
+            std::thread::spawn(move || {
+                let result = (|| {
+                    let mut store = SqliteStore::open(&db)?;
+                    let runtime =
+                        tokio::runtime::Runtime::new().map_err(|e| AppError::io("Chat", e))?;
+                    let result = runtime.block_on(chat::respond(
+                        &mut store,
+                        &session,
+                        &config,
+                        cancel,
+                        |p| {
+                            let _ = tx.send(Event::Progress(job_id, p.into()));
+                        },
+                    ));
+                    // Dropping a runtime can otherwise wait for an unrelated blocking HTTP task.
+                    runtime.shutdown_background();
+                    if let Err(error) = &result {
+                        let _ = store.record_chat_error(&session, &request, error);
+                    }
+                    result.map(|_| ())
+                })();
+                let _ = tx.send(Event::ChatFinished(job_id, result));
+            });
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_attach_files(move || {
+            if let Some(ui) = weak.upgrade() {
+                pick_files(&ui, &mut state.borrow_mut());
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_composer_edited(move || {
+            if let Some(ui) = weak.upgrade() {
+                let value = ui.get_composer();
+                if let Some(prefix) = value.strip_suffix('@')
+                    && prefix.chars().last().is_none_or(char::is_whitespace)
+                {
+                    pick_files(&ui, &mut state.borrow_mut());
+                }
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_remove_attachment(move |id| {
+            if let Some(ui) = weak.upgrade() {
+                let mut s = state.borrow_mut();
+                s.attachments.retain(|a| a.id != id.as_str());
+                refresh_attachments(&ui, &s);
+            }
+        });
+    }
+    bind_conversation_navigation(&ui, state.clone());
     {
         let weak = ui.as_weak();
         let state = state.clone();
@@ -695,8 +707,9 @@ pub fn run() -> anyhow::Result<()> {
             {
                 let mut s = state.borrow_mut();
                 if let Some(a) = s.animation.clone() {
-                    s.cancel = Arc::new(AtomicBool::new(false));
-                    let cancel = s.cancel.clone();
+                    let job = s.jobs.begin();
+                    let cancel = job.cancel;
+                    let job_id = job.id;
                     let path = PathBuf::from(ui.get_export_path().as_str());
                     let style = s.style.clone();
                     let tx = s.tx.clone();
@@ -718,7 +731,7 @@ pub fn run() -> anyhow::Result<()> {
                             )?;
                                     Ok(path)
                                 });
-                        let _ = tx.send(Event::Exported(result));
+                        let _ = tx.send(Event::Exported(job_id, result));
                     });
                 }
             }
@@ -783,11 +796,18 @@ pub fn run() -> anyhow::Result<()> {
                             }
                         }
                     }
-                    Event::Progress(message) => {
+                    Event::Progress(job, message) => {
+                        if !s.jobs.is_current(job) {
+                            continue;
+                        }
                         ui.set_status_text(message.into());
                         let _ = refresh_chat(&ui, &s);
                     }
-                    Event::ChatFinished(result) => {
+                    Event::ChatFinished(job, result) => {
+                        if !s.jobs.finish(job) {
+                            let _ = refresh_sessions(&ui, &s.db);
+                            continue;
+                        }
                         ui.set_busy(false);
                         match result {
                             Ok(()) => ui.set_status_text("回复完成".into()),
@@ -830,7 +850,10 @@ pub fn run() -> anyhow::Result<()> {
                             Err(error) => show_error(&ui, error),
                         }
                     }
-                    Event::Exported(result) => {
+                    Event::Exported(job, result) => {
+                        if !s.jobs.finish(job) {
+                            continue;
+                        }
                         ui.set_busy(false);
                         match result {
                             Ok(path) => {
@@ -859,13 +882,13 @@ pub fn run() -> anyhow::Result<()> {
         },
     );
     ui.run()?;
-    state.borrow().cancel.store(true, Ordering::Relaxed);
+    state.borrow_mut().jobs.stop();
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::session_label;
+    use super::*;
 
     #[test]
     fn session_labels_stay_on_one_line() {
@@ -875,5 +898,163 @@ mod tests {
         );
         assert_eq!(session_label("  spaced\t title  "), "spaced title");
         assert_eq!(session_label("\n"), "");
+    }
+
+    #[test]
+    fn animation_round_trips_keep_composer_and_delete_action_inside_the_window() {
+        use i_slint_backend_testing::ElementHandle;
+        i_slint_backend_testing::init_no_event_loop();
+        let ui = AppWindow::new().unwrap();
+        ui.set_selected_session("one".into());
+        ui.set_composer("尚未发送的草稿".into());
+        ui.set_sessions(ModelRc::new(VecModel::from(
+            (0..40)
+                .map(|i| SessionItem {
+                    id: i.to_string().into(),
+                    title: format!("会话 {i}").into(),
+                    status: "ready".into(),
+                })
+                .collect::<Vec<_>>(),
+        )));
+        let blocks = crate::chat::markdown::parse(&"段落与较长的回复内容。".repeat(120))
+            .into_iter()
+            .map(|block| MarkdownBlock {
+                kind: block.kind.into(),
+                raw: block.text.into(),
+                body: block.styled,
+                lines: 1,
+            })
+            .collect::<Vec<_>>();
+        ui.set_messages(ModelRc::new(VecModel::from(vec![ChatMessage {
+            role: "assistant".into(),
+            blocks: ModelRc::new(VecModel::from(blocks)),
+            files: Default::default(),
+        }])));
+        ui.show().unwrap();
+        for (width, height) in [(1320., 860.), (960., 640.), (1080., 720.), (1320., 860.)] {
+            ui.set_animation_open(true);
+            ui.window()
+                .dispatch_event(slint::platform::WindowEvent::Resized {
+                    size: slint::LogicalSize::new(width, height),
+                });
+            // Measure the animation before returning, so both page layouts are exercised.
+            assert!(ui.get_preview_width() > 1. && ui.get_preview_height() > 1.);
+            i_slint_backend_testing::mock_elapsed_time(Duration::from_millis(200));
+            slint::platform::update_timers_and_animations();
+            ui.set_animation_open(false);
+            for label in ["消息输入", "删除对话", "发送 ↑"] {
+                let element = ElementHandle::find_by_accessible_label(&ui, label)
+                    .next()
+                    .unwrap_or_else(|| panic!("Missing {label}"));
+                let position = element.absolute_position();
+                let size = element.size();
+                assert!(
+                    size.width > 1. && size.height > 1.,
+                    "Collapsed {label}: {size:?}"
+                );
+                assert!(
+                    position.x >= 0.
+                        && position.y >= 0.
+                        && position.x + size.width <= width + 1.
+                        && position.y + size.height <= height + 1.,
+                    "Offscreen {label}: {position:?} {size:?} in {width}×{height}"
+                );
+            }
+            assert_eq!(ui.get_composer(), "尚未发送的草稿");
+        }
+        ui.hide().unwrap();
+    }
+
+    #[test]
+    fn navigation_and_stop_callbacks_preserve_chat_and_unlock_other_conversations() {
+        i_slint_backend_testing::init_no_event_loop();
+        let directory = tempfile::tempdir().unwrap();
+        let db = directory.path().join("sessions.sqlite3");
+        let mut store = SqliteStore::open(&db).unwrap();
+        let first = store.create_chat("first").unwrap();
+        let second = store.create_chat("second").unwrap();
+        let (algorithm, trace) = crate::trace::simulate(&ProblemInput::default()).unwrap();
+        let plan = crate::visualization::plan(&algorithm, &trace).unwrap();
+        let animation = crate::animation::compile(&algorithm, &trace, &plan).unwrap();
+        let bundle = AnimationBundle {
+            title: "fixture".into(),
+            verification_id: "fixture".into(),
+            basis: "test fixture".into(),
+            cases: vec![chat::AnimationCase {
+                name: "normal".into(),
+                category: "normal".into(),
+                animation,
+            }],
+        };
+        let artifact = store
+            .add_artifact(
+                &first,
+                "chat-animation",
+                &serde_json::json!(bundle),
+                &[],
+                true,
+            )
+            .unwrap();
+        store
+            .append_message(
+                &first,
+                &chat::Message::new(
+                    "assistant",
+                    format!("[打开动画](oj-animation:{artifact})"),
+                    vec![],
+                ),
+            )
+            .unwrap();
+        let (tx, rx) = mpsc::channel();
+        let state = Rc::new(RefCell::new(State {
+            animation: None,
+            bundle: None,
+            animation_artifact: String::new(),
+            attachments: vec![],
+            file_pending: false,
+            preview: preview::PreviewWorker::new(tx.clone()),
+            preview_epoch: 0,
+            style: Arc::default(),
+            preview_size: None,
+            pending_resize: None,
+            player: Player::default(),
+            jobs: jobs::Jobs::default(),
+            last: Instant::now(),
+            last_frame: -1.,
+            rx,
+            tx,
+            db,
+        }));
+        let ui = AppWindow::new().unwrap();
+        bind_conversation_navigation(&ui, state.clone());
+        ui.invoke_select_session(first.clone().into());
+        ui.set_composer("保留的草稿".into());
+        for _ in 0..3 {
+            ui.invoke_open_link(format!("oj-animation:{artifact}").into());
+            assert!(ui.get_animation_open());
+            ui.invoke_back_to_chat();
+            assert!(!ui.get_animation_open());
+            assert_eq!(ui.get_selected_session(), first);
+            assert_eq!(ui.get_composer(), "保留的草稿");
+            assert_eq!(ui.get_messages().row_count(), 1);
+        }
+        let stopped = state.borrow_mut().jobs.begin();
+        ui.set_busy(true);
+        ui.invoke_cancel();
+        assert!(!ui.get_busy());
+        assert!(stopped.cancel.load(std::sync::atomic::Ordering::Relaxed));
+        ui.invoke_select_session(second.clone().into());
+        assert_eq!(ui.get_selected_session(), second);
+        assert_eq!(ui.get_status_text(), "就绪");
+        let next = state.borrow_mut().jobs.begin();
+        ui.set_busy(true);
+        assert!(!state.borrow_mut().jobs.finish(stopped.id));
+        assert!(ui.get_busy());
+        assert!(state.borrow().jobs.is_current(next.id));
+        ui.invoke_cancel();
+        ui.invoke_delete_session();
+        assert_eq!(ui.get_selected_session(), "");
+        assert_eq!(store.list().unwrap().len(), 1);
+        assert!(store.chat_animation(&first, &artifact).is_ok());
     }
 }

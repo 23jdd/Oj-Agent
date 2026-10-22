@@ -2,6 +2,10 @@
 
 The desktop is a conversation, not an algorithm configuration form. Set a provider, model and API key in **模型设置**, then send normal messages. Replies render Markdown headings, emphasis, lists, quotes, fenced code, tables and links. Code blocks are selectable and scroll when long. Use **Ctrl+Enter** to send; **停止** cancels model work and sandbox execution. Provider, model, endpoint and API key are saved to a local settings file; keys never enter sessions.
 
+Stopping immediately unlocks the composer and conversation history, so another conversation can be opened or started while the cancelled worker winds down. Late progress and completion events belong to that worker and cannot change a newer request's busy state or status. Returning from an animation preserves the current draft and keeps the composer and delete action within the window, including after resizing.
+
+点击“停止”后可立即继续输入、切换或新建对话；已停止任务的迟到消息不会影响新的请求。动画页返回后保留当前草稿，输入框和删除对话按钮保持可见。
+
 输入 `@`（位于单词开头）或点击“@ 添加文件”打开系统文件选择器。附件在添加时读取为快照，显示名称，可在发送前移除。每条消息最多 8 个 UTF-8 文本文件，每个不超过 100 KB；文件后续修改不会悄悄改变已发送内容。发送消息会将这些内容提供给所选模型，并保存到本机会话数据库中。应用不会扫描或自动上传其他文件。
 
 AI may answer without animation, verify code without creating animation, or create animation when useful. An animation appears as `[打开动画](oj-animation:UUID)` in a message. This is an application-local identifier: clicking opens the native animation page, never a browser, localhost page or web service. The router checks that the artifact belongs to the current conversation. The page supports case selection, play/pause, seek, steps, speed, GIF and JSON export, and return to chat. Animation and message records persist together.

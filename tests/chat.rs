@@ -1,7 +1,7 @@
 use oj_agent::{
     agent::{ModelConfig, Provider},
     chat::{self, Message},
-    session::SqliteStore,
+    session::{SessionStore, SqliteStore},
 };
 use serde_json::{Value, json};
 use std::{
@@ -87,6 +87,61 @@ fn prompt(request: &Value) -> Value {
             .collect::<String>()
     });
     serde_json::from_str(&text).unwrap()
+}
+
+#[test]
+fn cancelled_request_cannot_mark_a_new_turn_failed_or_recreate_a_deleted_session() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("first").unwrap();
+    let first = Message::new("user", "first request".into(), vec![]);
+    store.append_message(&session, &first).unwrap();
+    store
+        .record_chat_error(&session, &first.id, &oj_agent::agent::cancelled())
+        .unwrap();
+    assert_eq!(store.list().unwrap()[0].status, "cancelled");
+    let next = Message::new("user", "next request".into(), vec![]);
+    store.append_message(&session, &next).unwrap();
+    store.checkpoint(&session, "Chat", "processing").unwrap();
+    store
+        .record_chat_error(&session, &first.id, &oj_agent::agent::cancelled())
+        .unwrap();
+    assert_eq!(store.list().unwrap()[0].status, "processing");
+    store.delete(&session).unwrap();
+    store
+        .record_chat_error(&session, &next.id, &oj_agent::agent::cancelled())
+        .unwrap();
+    assert!(store.list().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn cancelled_conversation_does_not_cancel_a_different_conversations_request() {
+    let mut store = SqliteStore::memory().unwrap();
+    let stopped = store.create_chat("stopped").unwrap();
+    let stopped_message = Message::new("user", "stop this".into(), vec![]);
+    store.append_message(&stopped, &stopped_message).unwrap();
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let (config, server) = mock(
+        1,
+        |_, _| json!({"markdown":"第二个会话正常回复。","tool_calls":[],"done":true}),
+    );
+    let error = chat::respond(&mut store, &stopped, &config, cancel, |_| {})
+        .await
+        .unwrap_err();
+    assert_eq!(error.kind, "Cancelled");
+    store
+        .record_chat_error(&stopped, &stopped_message.id, &error)
+        .unwrap();
+    let next = store.create_chat("next").unwrap();
+    store
+        .append_message(&next, &Message::new("user", "answer this".into(), vec![]))
+        .unwrap();
+    let response = chat::respond(&mut store, &next, &config, Arc::default(), |_| {})
+        .await
+        .unwrap();
+    assert!(response.markdown.contains("正常回复"));
+    assert_eq!(store.messages(&stopped).unwrap().len(), 1);
+    assert_eq!(store.messages(&next).unwrap().len(), 2);
+    server.join().unwrap();
 }
 #[tokio::test]
 async fn conversation_preserves_context_and_can_answer_without_animation() {

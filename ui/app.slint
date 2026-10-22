@@ -125,12 +125,14 @@ export component AppWindow inherits Window {
             spacing: Theme.spacing-md; vertical-stretch: 1;
             if root.history-open: Panel {
                 width: Theme.sidebar-width;
+                min-height: 0px;
                 VerticalLayout {
                     padding: Theme.spacing-md; spacing: Theme.spacing-sm;
                     SectionLabel { text: "对话 / CONVERSATIONS"; font-weight: 700; color: Theme.text-primary; }
                     AppButton { text: "+ 新对话"; primary: true; enabled: !root.busy; clicked => { root.new-session(); } }
                     Divider {}
                     ScrollView {
+                        min-height: 0px; preferred-height: 0px; vertical-stretch: 1;
                         content-width: self.visible-width;
                         VerticalLayout {
                             spacing: Theme.spacing-sm;
@@ -146,80 +148,78 @@ export component AppWindow inherits Window {
                     AppButton { text: "删除对话"; enabled: root.selected-session != "" && !root.busy; clicked => { root.delete-session(); } }
                 }
             }
-            // Keep the chat instantiated while the animation page is open so its scroll
-            // area and composer keep their sizes when returning.
+            // Both pages retain the same viewport. Hidden pages never contribute a
+            // zero-width text layout or minimum size to the workspace/sidebar.
             Rectangle {
-                visible: !root.animation-open;
-                vertical-stretch: 1;
-                min-height: 0px;
-                min-width: 0px;
-                max-width: root.animation-open ? 0px : 100000px;
-                horizontal-stretch: root.animation-open ? 0 : 1;
-                clip: true;
-                VerticalLayout {
-                    width: parent.width;
-                    height: parent.height;
-                    min-height: 0px;
-                    Timer {
-                    interval: 16ms;
-                    running: root.reveal-pending && !root.animation-open;
-                    triggered => {
-                        message-scroll.content-y = min(0px, message-scroll.visible-height - message-scroll.content-height);
-                        root.reveal-pending = false;
-                    }
-                }
-                spacing: Theme.spacing-md;
-                message-scroll := ScrollView {
-                    min-height: 0px; preferred-height: 0px; vertical-stretch: 1;
-                    content-width: self.visible-width;
+                horizontal-stretch: 1; vertical-stretch: 1;
+                min-width: 0px; min-height: 0px; clip: true;
+                Rectangle {
+                    width: parent.width; height: parent.height;
+                    visible: !root.animation-open;
+                    clip: true;
                     VerticalLayout {
-                        padding: Theme.spacing-lg; spacing: Theme.spacing-md;
-                        if root.messages.length == 0: VerticalLayout {
-                            vertical-stretch: 0;
-                            spacing: Theme.spacing-lg;
-                            Text { text: "从一个问题开始。"; font-size: Theme.heading-size; font-weight: 700; color: Theme.text-primary; }
-                            Text { text: "讨论题目、检查代码，或让 AI 解释执行过程。输入 @ 添加文件。\n需要动画时，AI 会在消息中提供可打开的动画入口。"; font-size: Theme.text-size; color: Theme.text-secondary; wrap: word-wrap; }
+                        width: parent.width;
+                        height: parent.height;
+                        min-height: 0px;
+                        Timer {
+                            interval: 16ms;
+                            running: root.reveal-pending && !root.animation-open;
+                            triggered => {
+                                message-scroll.content-y = min(0px, message-scroll.visible-height - message-scroll.content-height);
+                                root.reveal-pending = false;
+                            }
                         }
-                        for message in root.messages: MessageView { message: message; open-link(url) => { root.open-link(url); } }
-                    }
-                }
-                if root.attachments.length > 0: HorizontalLayout {
-                    spacing: Theme.spacing-sm;
-                    for file in root.attachments: AppButton { text: "@" + file.name + " ×"; enabled: !root.busy; clicked => { root.remove-attachment(file.id); } }
-                }
-                Panel {
-                    vertical-stretch: 0;
-                    VerticalLayout {
-                        padding: Theme.spacing-sm; spacing: Theme.spacing-sm;
-                        TextArea { text <=> root.composer; enabled: !root.busy; height: 112px; edited(value) => { root.composer-edited(); } submitted => { if !root.busy { root.send-message(); } } }
-                        HorizontalLayout {
+                        spacing: Theme.spacing-md;
+                        message-scroll := ScrollView {
+                            min-height: 0px; preferred-height: 0px; vertical-stretch: 1;
+                            content-width: self.visible-width;
+                            VerticalLayout {
+                                padding: Theme.spacing-lg; spacing: Theme.spacing-md;
+                                if root.messages.length == 0: VerticalLayout {
+                                    vertical-stretch: 0;
+                                    spacing: Theme.spacing-lg;
+                                    Text { text: "从一个问题开始。"; font-size: Theme.heading-size; font-weight: 700; color: Theme.text-primary; }
+                                    Text { text: "讨论题目、检查代码，或让 AI 解释执行过程。输入 @ 添加文件。\n需要动画时，AI 会在消息中提供可打开的动画入口。"; font-size: Theme.text-size; color: Theme.text-secondary; wrap: word-wrap; }
+                                }
+                                for message in root.messages: MessageView { message: message; open-link(url) => { root.open-link(url); } }
+                            }
+                        }
+                        if root.attachments.length > 0: HorizontalLayout {
                             spacing: Theme.spacing-sm;
-                            AppButton { text: "@ 添加文件"; width: 128px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.attach-files(); } }
-                            SectionLabel { text: "Markdown · Ctrl+Enter 发送"; horizontal-stretch: 1; }
-                            if root.busy: AppButton { text: "停止"; width: 80px; horizontal-stretch: 0; clicked => { root.cancel(); } }
-                            AppButton { text: "发送 ↑"; width: 96px; horizontal-stretch: 0; primary: true; enabled: !root.busy && (root.composer != "" || root.attachments.length > 0); clicked => { root.send-message(); } }
+                            for file in root.attachments: AppButton { text: "@" + file.name + " ×"; enabled: !root.busy; clicked => { root.remove-attachment(file.id); } }
+                        }
+                        Panel {
+                            vertical-stretch: 0;
+                            VerticalLayout {
+                                padding: Theme.spacing-sm; spacing: Theme.spacing-sm;
+                                TextArea { accessible-role: text-input; accessible-label: "消息输入"; text <=> root.composer; enabled: !root.busy; height: 112px; edited(value) => { root.composer-edited(); } submitted => { if !root.busy { root.send-message(); } } }
+                                HorizontalLayout {
+                                    spacing: Theme.spacing-sm;
+                                    AppButton { text: "@ 添加文件"; width: 128px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.attach-files(); } }
+                                    SectionLabel { text: "Markdown · Ctrl+Enter 发送"; horizontal-stretch: 1; }
+                                    if root.busy: AppButton { text: "停止"; width: 80px; horizontal-stretch: 0; clicked => { root.cancel(); } }
+                                    AppButton { text: "发送 ↑"; width: 96px; horizontal-stretch: 0; primary: true; enabled: !root.busy && (root.composer != "" || root.attachments.length > 0); clicked => { root.send-message(); } }
+                                }
+                            }
                         }
                     }
                 }
+                animation-page := AnimationPage {
+                    width: parent.width; height: parent.height;
+                    visible: root.animation-open;
+                    frame: root.frame; frame-pixel-width: root.frame-pixel-width; frame-pixel-height: root.frame-pixel-height;
+                    preview-scale-factor: root.preview-scale-factor;
+                    title: root.animation-title; basis: root.animation-basis;
+                    case-names: root.case-names; case-index <=> root.case-index;
+                    busy: root.busy; playing: root.playing; time-label: root.time-label;
+                    position <=> root.position; speed-index <=> root.speed-index; export-path <=> root.export-path;
+                    back => { root.back-to-chat(); }
+                    select-case(index) => { root.select-case(index); }
+                    play-pause => { root.play-pause(); } step(forward) => { root.step(forward); }
+                    restart => { root.restart(); } seek(value) => { root.seek(value); }
+                    change-speed(index) => { root.change-speed(index); }
+                    export-gif => { root.export-gif(); } export-json => { root.export-json(); }
                 }
-            }
-            animation-page := AnimationPage {
-                visible: root.animation-open;
-                min-width: 0px;
-                max-width: root.animation-open ? 100000px : 0px;
-                horizontal-stretch: root.animation-open ? 1 : 0;
-                frame: root.frame; frame-pixel-width: root.frame-pixel-width; frame-pixel-height: root.frame-pixel-height;
-                preview-scale-factor: root.preview-scale-factor;
-                title: root.animation-title; basis: root.animation-basis;
-                case-names: root.case-names; case-index <=> root.case-index;
-                busy: root.busy; playing: root.playing; time-label: root.time-label;
-                position <=> root.position; speed-index <=> root.speed-index; export-path <=> root.export-path;
-                back => { root.back-to-chat(); }
-                select-case(index) => { root.select-case(index); }
-                play-pause => { root.play-pause(); } step(forward) => { root.step(forward); }
-                restart => { root.restart(); } seek(value) => { root.seek(value); }
-                change-speed(index) => { root.change-speed(index); }
-                export-gif => { root.export-gif(); } export-json => { root.export-json(); }
             }
         }
         if root.error-text != "": Panel {

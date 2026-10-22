@@ -241,6 +241,44 @@ PRAGMA user_version=1;
             },
         )
     }
+    /// A stopped request may finish after a new turn starts or the conversation is deleted.
+    /// Its error must not change the newer turn's status or recreate deleted history.
+    pub fn record_chat_error(
+        &mut self,
+        session: &str,
+        request: &str,
+        error: &AppError,
+    ) -> Result<()> {
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(db)?;
+        let latest: Option<String> = tx.query_row(
+            "SELECT id FROM chat_messages WHERE session_id=?1 AND json_extract(document,'$.role')='user' ORDER BY seq DESC LIMIT 1",
+            [session], |row| row.get(0),
+        ).optional().map_err(db)?;
+        if latest.as_deref() != Some(request) {
+            return Ok(());
+        }
+        let status = if error.kind == "Cancelled" {
+            "cancelled"
+        } else {
+            "failed"
+        };
+        let now = Utc::now().to_rfc3339();
+        tx.execute(
+            "INSERT INTO errors(session_id,document) VALUES(?1,?2)",
+            params![session, serde_json::to_string(error).map_err(db)?],
+        )
+        .map_err(db)?;
+        tx.execute(
+            "UPDATE sessions SET status=?2,stage=?3,updated_at=?4 WHERE id=?1",
+            params![session, status, error.stage, now],
+        )
+        .map_err(db)?;
+        tx.execute("INSERT INTO events SELECT ?1,COALESCE(MAX(seq),0)+1,?2,?3,?4 FROM events WHERE session_id=?1", params![session,error.stage,status,now]).map_err(db)?;
+        tx.commit().map_err(db)
+    }
     pub fn record_export(&mut self, id: &str, path: &Path, format: &str) -> Result<String> {
         let animation = self.active(id, "animation")?.ok_or_else(|| {
             AppError::validation(

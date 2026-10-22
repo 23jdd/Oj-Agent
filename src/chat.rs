@@ -144,6 +144,7 @@ pub async fn respond(
             ));
         }
         let response = model.chat_completion(&prompt, &cancel).await?;
+        agent::check_cancelled(&cancel)?;
         let turn = match parse_turn(&response) {
             Ok(turn) => turn,
             Err(error) => {
@@ -183,6 +184,7 @@ pub async fn respond(
                 }
             }
             let message = Message::new("assistant", body, vec![]);
+            agent::check_cancelled(&cancel)?;
             store.append_message(session, &message)?;
             store.checkpoint(session, "Chat", "ready")?;
             return Ok(message);
