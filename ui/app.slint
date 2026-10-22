@@ -12,6 +12,7 @@ export struct SessionItem { id: string, title: string, status: string }
 
 export component AppWindow inherits Window {
     title: "OJ Agent · 算法演绎";
+    icon: @image-url("icons/app-icon.png");
     no-frame: true;
     resize-border-width: root.maximized ? 0px : Theme.spacing-sm;
     preferred-width: 1320px; preferred-height: 860px;
