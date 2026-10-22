@@ -8,7 +8,7 @@ import { StyleEditor, StyleField, StylePreview } from "style-editor.slint";
 export { StyleField, StylePreview } from "style-editor.slint";
 import { AppButton, IconButton, TextField, TextArea, SelectBox, AppCheckBox, SeekBar, SectionLabel, Divider, Panel } from "components.slint";
 
-export struct SessionItem { id: string, title: string, status: string }
+export struct SessionItem { id: string, title: string, status: string, busy: bool }
 
 export component AppWindow inherits Window {
     title: "OJ Agent · 算法演绎";
@@ -43,6 +43,7 @@ export component AppWindow inherits Window {
     private property <bool> source-open: false;
     private property <bool> modal-open: root.style-open || root.settings-open;
     in property <bool> busy: false;
+    in property <bool> file-pending: false;
     in property <bool> playing: false;
     in property <string> selected-session;
     in property <[SessionItem]> sessions;
@@ -129,7 +130,7 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     padding: Theme.spacing-md; spacing: Theme.spacing-sm;
                     SectionLabel { text: "对话 / CONVERSATIONS"; font-weight: 700; color: Theme.text-primary; }
-                    AppButton { text: "+ 新对话"; primary: true; enabled: !root.busy; clicked => { root.new-session(); } }
+                    AppButton { text: "+ 新对话"; primary: true; clicked => { root.new-session(); } }
                     Divider {}
                     ScrollView {
                         min-height: 0px; preferred-height: 0px; vertical-stretch: 1;
@@ -137,15 +138,14 @@ export component AppWindow inherits Window {
                         VerticalLayout {
                             spacing: Theme.spacing-sm;
                             for item in root.sessions: AppButton {
-                                text: item.title;
+                                text: (item.busy ? "…  " : "") + item.title;
                                 text-align: start;
                                 selected: item.id == root.selected-session;
-                                enabled: !root.busy;
                                 clicked => { root.select-session(item.id); }
                             }
                         }
                     }
-                    AppButton { text: "删除对话"; enabled: root.selected-session != "" && !root.busy; clicked => { root.delete-session(); } }
+                    AppButton { text: "删除对话"; enabled: root.selected-session != ""; clicked => { root.delete-session(); } }
                 }
             }
             // Both pages retain the same viewport. Hidden pages never contribute a
@@ -195,10 +195,10 @@ export component AppWindow inherits Window {
                                 TextArea { accessible-role: text-input; accessible-label: "消息输入"; text <=> root.composer; enabled: !root.busy; height: 112px; edited(value) => { root.composer-edited(); } submitted => { if !root.busy { root.send-message(); } } }
                                 HorizontalLayout {
                                     spacing: Theme.spacing-sm;
-                                    AppButton { text: "@ 添加文件"; width: 128px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.attach-files(); } }
+                                    AppButton { text: "@ 添加文件"; width: 128px; horizontal-stretch: 0; enabled: !root.busy && !root.file-pending; clicked => { root.attach-files(); } }
                                     SectionLabel { text: "Markdown · Ctrl+Enter 发送"; horizontal-stretch: 1; }
                                     if root.busy: AppButton { text: "停止"; width: 80px; horizontal-stretch: 0; clicked => { root.cancel(); } }
-                                    AppButton { text: "发送 ↑"; width: 96px; horizontal-stretch: 0; primary: true; enabled: !root.busy && (root.composer != "" || root.attachments.length > 0); clicked => { root.send-message(); } }
+                                    AppButton { text: "发送 ↑"; width: 96px; horizontal-stretch: 0; primary: true; enabled: !root.busy && !root.file-pending && (root.composer != "" || root.attachments.length > 0); clicked => { root.send-message(); } }
                                 }
                             }
                         }

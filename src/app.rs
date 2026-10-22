@@ -12,13 +12,17 @@ use crate::{
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use std::{
     cell::RefCell,
-    path::{Path, PathBuf},
+    collections::HashMap,
+    path::PathBuf,
     rc::Rc,
     sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
 slint::include_modules!();
 mod appearance;
+#[cfg(test)]
+mod concurrency_tests;
+mod conversations;
 mod jobs;
 mod preview;
 
@@ -50,15 +54,18 @@ enum Event {
     },
     Progress(uuid::Uuid, String),
     ChatFinished(uuid::Uuid, Result<()>),
-    Attached(Result<Vec<Attachment>>),
+    Attached {
+        session: String,
+        request: uuid::Uuid,
+        result: Result<Vec<Attachment>>,
+    },
     Exported(uuid::Uuid, Result<PathBuf>),
 }
 struct State {
     animation: Option<Arc<AnimationIr>>,
     bundle: Option<AnimationBundle>,
     animation_artifact: String,
-    attachments: Vec<Attachment>,
-    file_pending: bool,
+    conversations: HashMap<String, conversations::Conversation>,
     preview: preview::PreviewWorker,
     preview_epoch: u64,
     style: Arc<StyleConfig>,
@@ -100,11 +107,12 @@ fn provider_from_index(index: i32) -> Provider {
 fn session_label(title: &str) -> String {
     title.split_whitespace().collect::<Vec<_>>().join(" ")
 }
-fn refresh_sessions(ui: &AppWindow, path: &Path) -> Result<()> {
-    let items = SqliteStore::open(path)?
+fn refresh_sessions(ui: &AppWindow, state: &State) -> Result<()> {
+    let items = SqliteStore::open(&state.db)?
         .list()?
         .into_iter()
         .map(|s| SessionItem {
+            busy: state.jobs.busy(&s.id),
             id: s.id.into(),
             title: session_label(&s.title).into(),
             status: s.status.into(),
@@ -156,8 +164,10 @@ fn refresh_chat(ui: &AppWindow, state: &State) -> Result<()> {
 fn refresh_attachments(ui: &AppWindow, state: &State) {
     ui.set_attachments(ModelRc::new(VecModel::from(
         state
-            .attachments
-            .iter()
+            .conversations
+            .get(ui.get_selected_session().as_str())
+            .into_iter()
+            .flat_map(|view| view.attachments.iter())
             .map(|a| AttachmentItem {
                 id: a.id.clone().into(),
                 name: a.name.clone().into(),
@@ -165,27 +175,61 @@ fn refresh_attachments(ui: &AppWindow, state: &State) {
             .collect::<Vec<_>>(),
     )));
 }
-fn clear_chat(ui: &AppWindow, state: &mut State) {
+fn save_draft(ui: &AppWindow, state: &mut State) {
+    state
+        .conversations
+        .entry(ui.get_selected_session().to_string())
+        .or_default()
+        .draft = ui.get_composer().to_string();
+}
+fn sync_current(ui: &AppWindow, state: &State) {
+    let session = ui.get_selected_session();
+    let view = state.conversations.get(session.as_str());
+    ui.set_busy(state.jobs.busy(&session));
+    ui.set_file_pending(view.is_some_and(|view| view.file_request.is_some()));
+    ui.set_status_text(
+        view.map(|view| view.status.as_str())
+            .unwrap_or("就绪")
+            .into(),
+    );
+    ui.set_error_text(view.map(|view| view.error.as_str()).unwrap_or("").into());
+}
+fn restore_draft(ui: &AppWindow, state: &State) {
+    ui.set_composer(
+        state
+            .conversations
+            .get(ui.get_selected_session().as_str())
+            .map(|view| view.draft.as_str())
+            .unwrap_or("")
+            .into(),
+    );
+    refresh_attachments(ui, state);
+    sync_current(ui, state);
+}
+fn switch_chat(ui: &AppWindow, state: &mut State, session: &str) -> Result<()> {
+    save_draft(ui, state);
     state.animation = None;
     state.bundle = None;
     state.animation_artifact.clear();
-    state.attachments.clear();
     state.preview_epoch = state.preview_epoch.wrapping_add(1);
     state.player = Player::default();
-    ui.set_selected_session("".into());
-    ui.set_composer("".into());
+    ui.set_selected_session(session.into());
     ui.set_animation_open(false);
     ui.set_playing(false);
-    ui.set_messages(Default::default());
-    ui.set_error_text("".into());
-    ui.set_status_text("就绪".into());
-    refresh_attachments(ui, state);
+    restore_draft(ui, state);
+    refresh_chat(ui, state)?;
+    ui.invoke_reveal_latest();
+    Ok(())
 }
 fn pick_files(ui: &AppWindow, state: &mut State) {
-    if state.file_pending || ui.get_busy() {
+    let session = ui.get_selected_session().to_string();
+    let view = state.conversations.entry(session.clone()).or_default();
+    if view.file_request.is_some() || state.jobs.busy(&session) {
         return;
     }
-    state.file_pending = true;
+    let request = uuid::Uuid::new_v4();
+    view.file_request = Some(request);
+    sync_current(ui, state);
     let tx = state.tx.clone();
     std::thread::spawn(move || {
         let files = rfd::FileDialog::new()
@@ -202,7 +246,11 @@ fn pick_files(ui: &AppWindow, state: &mut State) {
         } else {
             files.iter().map(|p| chat::files::attach(p)).collect()
         };
-        let _ = tx.send(Event::Attached(result));
+        let _ = tx.send(Event::Attached {
+            session,
+            request,
+            result,
+        });
     });
 }
 fn select_case(ui: &AppWindow, state: &mut State, index: usize) -> Result<()> {
@@ -289,11 +337,16 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
         let weak = ui.as_weak();
         let state = state.clone();
         ui.on_cancel(move || {
-            state.borrow_mut().jobs.stop();
             if let Some(ui) = weak.upgrade() {
-                ui.set_busy(false);
-                ui.set_error_text("".into());
-                ui.set_status_text("已停止，可以继续对话或切换会话".into());
+                let mut state = state.borrow_mut();
+                let session = ui.get_selected_session().to_string();
+                if state.jobs.stop(&session) {
+                    let view = state.conversations.entry(session).or_default();
+                    view.error.clear();
+                    view.status = "已停止，可以继续对话或切换会话".into();
+                }
+                sync_current(&ui, &state);
+                let _ = refresh_sessions(&ui, &state);
             }
         });
     }
@@ -302,10 +355,9 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
         let state = state.clone();
         ui.on_new_session(move || {
             if let Some(ui) = weak.upgrade()
-                && !ui.get_busy()
+                && let Err(error) = switch_chat(&ui, &mut state.borrow_mut(), "")
             {
-                clear_chat(&ui, &mut state.borrow_mut());
-                ui.set_status_text("新对话".into());
+                show_error(&ui, error);
             }
         });
     }
@@ -313,13 +365,9 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
         let weak = ui.as_weak();
         let state = state.clone();
         ui.on_select_session(move |id| {
-            if let Some(ui) = weak.upgrade()
-                && !ui.get_busy()
-            {
+            if let Some(ui) = weak.upgrade() {
                 let mut s = state.borrow_mut();
-                clear_chat(&ui, &mut s);
-                ui.set_selected_session(id);
-                if let Err(error) = refresh_chat(&ui, &s) {
+                if let Err(error) = switch_chat(&ui, &mut s, &id) {
                     show_error(&ui, error);
                 }
             }
@@ -329,16 +377,18 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
         let weak = ui.as_weak();
         let state = state.clone();
         ui.on_delete_session(move || {
-            if let Some(ui) = weak.upgrade()
-                && !ui.get_busy()
-            {
+            if let Some(ui) = weak.upgrade() {
                 let mut s = state.borrow_mut();
-                let result = SqliteStore::open(&s.db)
-                    .and_then(|mut store| store.delete(&ui.get_selected_session()));
+                let session = ui.get_selected_session().to_string();
+                let result = SqliteStore::open(&s.db).and_then(|mut store| store.delete(&session));
                 match result {
                     Ok(()) => {
-                        clear_chat(&ui, &mut s);
-                        let _ = refresh_sessions(&ui, &s.db);
+                        s.jobs.stop(&session);
+                        if let Err(error) = switch_chat(&ui, &mut s, "") {
+                            show_error(&ui, error);
+                        }
+                        s.conversations.remove(&session);
+                        let _ = refresh_sessions(&ui, &s);
                     }
                     Err(error) => show_error(&ui, error),
                 }
@@ -414,6 +464,239 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
     }
 }
 
+fn finish_job(ui: &AppWindow, state: &mut State, job: uuid::Uuid, result: Result<String>) {
+    let Some(session) = state.jobs.finish(job) else {
+        let _ = refresh_sessions(ui, state);
+        return;
+    };
+    let view = state.conversations.entry(session.clone()).or_default();
+    match result {
+        Ok(status) => {
+            view.status = status;
+            view.error.clear();
+        }
+        Err(error) => {
+            view.status = if error.kind == "Cancelled" {
+                "已停止"
+            } else {
+                "操作未完成"
+            }
+            .into();
+            view.error = error.to_string();
+        }
+    }
+    if ui.get_selected_session() == session {
+        sync_current(ui, state);
+        let _ = refresh_chat(ui, state);
+    }
+    let _ = refresh_sessions(ui, state);
+}
+fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
+    match event {
+        Event::Preview {
+            animation,
+            epoch,
+            frame,
+        } => {
+            if s.preview_epoch == epoch
+                && s.animation
+                    .as_ref()
+                    .is_some_and(|a| Arc::ptr_eq(a, &animation))
+            {
+                match frame {
+                    Ok(pixels) => {
+                        ui.set_frame_pixel_width(pixels.width() as i32);
+                        ui.set_frame_pixel_height(pixels.height() as i32);
+                        ui.set_frame(slint::Image::from_rgba8_premultiplied(pixels));
+                    }
+                    Err(error) => {
+                        s.player.playing = false;
+                        s.preview_epoch = s.preview_epoch.wrapping_add(1);
+                        show_error(ui, error);
+                    }
+                }
+            }
+        }
+        Event::Progress(job, message) => {
+            let Some(session) = s.jobs.owner(job).map(str::to_owned) else {
+                return;
+            };
+            s.conversations.entry(session.clone()).or_default().status = message;
+            if ui.get_selected_session() == session {
+                sync_current(ui, s);
+                let _ = refresh_chat(ui, s);
+            }
+        }
+        Event::ChatFinished(job, result) => {
+            finish_job(ui, s, job, result.map(|()| "回复完成".into()));
+        }
+        Event::Attached {
+            session,
+            request,
+            result,
+        } => {
+            if ui.get_selected_session() == session {
+                save_draft(ui, s);
+            }
+            let Some(view) = s
+                .conversations
+                .get_mut(&session)
+                .filter(|view| view.file_request == Some(request))
+            else {
+                return;
+            };
+            view.file_request = None;
+            match result {
+                Ok(files) => {
+                    if view.attachments.len() + files.len() > 8 {
+                        view.error =
+                            AppError::validation("Attachment", "At most eight files per message.")
+                                .to_string();
+                    } else {
+                        if !files.is_empty() && view.draft.ends_with('@') {
+                            view.draft.pop();
+                        }
+                        for file in files {
+                            if !view
+                                .attachments
+                                .iter()
+                                .any(|a| a.sha256 == file.sha256 && a.name == file.name)
+                            {
+                                view.draft.push_str(&format!("@{} ", file.name));
+                                view.attachments.push(file);
+                            }
+                        }
+                    }
+                }
+                Err(error) => {
+                    view.error = error.to_string();
+                }
+            }
+            if ui.get_selected_session() == session {
+                restore_draft(ui, s);
+            }
+        }
+        Event::Exported(job, result) => {
+            finish_job(
+                ui,
+                s,
+                job,
+                result.map(|path| format!("已导出 {}", path.display())),
+            );
+        }
+    }
+}
+
+fn bind_chat_send(ui: &AppWindow, state: Rc<RefCell<State>>) {
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_send_message(move || {
+            let Some(ui) = weak.upgrade() else {
+                return;
+            };
+            if ui.get_busy() {
+                return;
+            }
+            let config = ModelConfig {
+                provider: provider_from_index(ui.get_provider_index()),
+                model: ui.get_model_name().into(),
+                endpoint: ui.get_endpoint().into(),
+                api_key: ui.get_api_key().into(),
+            };
+            if let Err(error) = config.validate() {
+                ui.set_style_open(false);
+                ui.set_settings_open(true);
+                show_error(&ui, error);
+                return;
+            }
+            let mut s = state.borrow_mut();
+            let previous_session = ui.get_selected_session().to_string();
+            if s.jobs.busy(&previous_session) || s.conversations.get(&previous_session).is_some_and(|view| view.file_request.is_some()) { return; }
+            let attachments = s.conversations.entry(previous_session.clone()).or_default().attachments.clone();
+            let text = ui.get_composer().trim().to_string();
+            if text.is_empty() && attachments.is_empty() {
+                return;
+            }
+            if text.len() > 100_000 {
+                show_error(&ui, AppError::validation("Chat", "Message exceeds 100 KB."));
+                return;
+            }
+            let result = (|| {
+                let title = session_label(&text).chars().take(32).collect::<String>();
+                let message = chat::Message::new(
+                    "user",
+                    if text.is_empty() {
+                        "请查看附件。".into()
+                    } else {
+                        text
+                    },
+                    attachments,
+                );
+                if serde_json::to_vec(&message).map_err(|e|AppError::io("Chat",e))?.len() > 900_000 {
+                    return Err(AppError::new("CHAT_CONTEXT_LIMIT","Input","Chat","This message and its attachments are too large; remove or shorten some files."));
+                }
+                let mut store = SqliteStore::open(&s.db)?;
+                let session = if ui.get_selected_session().is_empty() {
+                    store.create_chat(if title.is_empty() { "附件讨论" } else { &title })?
+                } else { ui.get_selected_session().to_string() };
+                store.append_message(&session, &message)?;
+                store.checkpoint(&session, "Chat", "processing")?;
+                ui.set_selected_session(session.clone().into());
+                Ok((session, message.id))
+            })();
+            let (session, request) = match result {
+                Ok(session) => session,
+                Err(error) => {
+                    show_error(&ui, error);
+                    return;
+                }
+            };
+            if previous_session != session && let Some(view) = s.conversations.remove(&previous_session) {
+                s.conversations.insert(session.clone(), view);
+            }
+            let view = s.conversations.entry(session.clone()).or_default();
+            view.attachments.clear();
+            view.draft.clear();
+            view.error.clear();
+            view.status = "AI 正在回复…".into();
+            refresh_attachments(&ui, &s);
+            ui.set_composer("".into());
+            let job = s.jobs.begin(&session).expect("the current conversation has no active job");
+            sync_current(&ui, &s);
+            let _ = refresh_chat(&ui, &s);
+            let _ = refresh_sessions(&ui, &s);
+            let cancel = job.cancel;
+            let job_id = job.id;
+            let tx = s.tx.clone();
+            let db = s.db.clone();
+            std::thread::spawn(move || {
+                let result = (|| {
+                    let mut store = SqliteStore::open(&db)?;
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all().build().map_err(|e| AppError::io("Chat", e))?;
+                    let result = runtime.block_on(chat::respond(
+                        &mut store,
+                        &session,
+                        &config,
+                        cancel,
+                        |p| {
+                            let _ = tx.send(Event::Progress(job_id, p.into()));
+                        },
+                    ));
+                    // Dropping a runtime can otherwise wait for an unrelated blocking HTTP task.
+                    runtime.shutdown_background();
+                    if let Err(error) = &result {
+                        let _ = store.record_chat_error(&session, &request, error);
+                    }
+                    result.map(|_| ())
+                })();
+                let _ = tx.send(Event::ChatFinished(job_id, result));
+            });
+        });
+    }
+}
+
 pub fn run() -> anyhow::Result<()> {
     slint::BackendSelector::new()
         .backend_name("winit".into())
@@ -445,14 +728,12 @@ pub fn run() -> anyhow::Result<()> {
     ui.set_model_config_path(model_path.display().to_string().into());
     let db = database_path()?;
     SqliteStore::open(&db)?.recover_interrupted()?;
-    refresh_sessions(&ui, &db)?;
     let (tx, rx) = mpsc::channel();
     let state = Rc::new(RefCell::new(State {
         animation: None,
         bundle: None,
         animation_artifact: String::new(),
-        attachments: vec![],
-        file_pending: false,
+        conversations: HashMap::default(),
         preview: preview::PreviewWorker::new(tx.clone()),
         preview_epoch: 0,
         style: Arc::new(style),
@@ -466,6 +747,7 @@ pub fn run() -> anyhow::Result<()> {
         tx,
         db,
     }));
+    refresh_sessions(&ui, &state.borrow())?;
     appearance::bind(&ui, state.clone(), style_path);
     if let Some(error) = style_error.or(model_error) {
         show_error(&ui, error);
@@ -494,105 +776,7 @@ pub fn run() -> anyhow::Result<()> {
             }
         });
     }
-    {
-        let weak = ui.as_weak();
-        let state = state.clone();
-        ui.on_send_message(move || {
-            let Some(ui) = weak.upgrade() else {
-                return;
-            };
-            if ui.get_busy() {
-                return;
-            }
-            let config = ModelConfig {
-                provider: provider_from_index(ui.get_provider_index()),
-                model: ui.get_model_name().into(),
-                endpoint: ui.get_endpoint().into(),
-                api_key: ui.get_api_key().into(),
-            };
-            if let Err(error) = config.validate() {
-                ui.set_style_open(false);
-                ui.set_settings_open(true);
-                show_error(&ui, error);
-                return;
-            }
-            let mut s = state.borrow_mut();
-            let text = ui.get_composer().trim().to_string();
-            if text.is_empty() && s.attachments.is_empty() {
-                return;
-            }
-            if text.len() > 100_000 {
-                show_error(&ui, AppError::validation("Chat", "Message exceeds 100 KB."));
-                return;
-            }
-            let result = (|| {
-                let title = session_label(&text).chars().take(32).collect::<String>();
-                let message = chat::Message::new(
-                    "user",
-                    if text.is_empty() {
-                        "请查看附件。".into()
-                    } else {
-                        text
-                    },
-                    s.attachments.clone(),
-                );
-                if serde_json::to_vec(&message).map_err(|e|AppError::io("Chat",e))?.len() > 900_000 {
-                    return Err(AppError::new("CHAT_CONTEXT_LIMIT","Input","Chat","This message and its attachments are too large; remove or shorten some files."));
-                }
-                let mut store = SqliteStore::open(&s.db)?;
-                let session = if ui.get_selected_session().is_empty() {
-                    store.create_chat(if title.is_empty() { "附件讨论" } else { &title })?
-                } else { ui.get_selected_session().to_string() };
-                store.append_message(&session, &message)?;
-                store.checkpoint(&session, "Chat", "processing")?;
-                ui.set_selected_session(session.clone().into());
-                Ok((session, message.id))
-            })();
-            let (session, request) = match result {
-                Ok(session) => session,
-                Err(error) => {
-                    show_error(&ui, error);
-                    return;
-                }
-            };
-            s.attachments.clear();
-            refresh_attachments(&ui, &s);
-            ui.set_composer("".into());
-            ui.set_error_text("".into());
-            ui.set_busy(true);
-            ui.set_status_text("AI 正在回复…".into());
-            let _ = refresh_chat(&ui, &s);
-            let _ = refresh_sessions(&ui, &s.db);
-            let job = s.jobs.begin();
-            let cancel = job.cancel;
-            let job_id = job.id;
-            let tx = s.tx.clone();
-            let db = s.db.clone();
-            std::thread::spawn(move || {
-                let result = (|| {
-                    let mut store = SqliteStore::open(&db)?;
-                    let runtime =
-                        tokio::runtime::Runtime::new().map_err(|e| AppError::io("Chat", e))?;
-                    let result = runtime.block_on(chat::respond(
-                        &mut store,
-                        &session,
-                        &config,
-                        cancel,
-                        |p| {
-                            let _ = tx.send(Event::Progress(job_id, p.into()));
-                        },
-                    ));
-                    // Dropping a runtime can otherwise wait for an unrelated blocking HTTP task.
-                    runtime.shutdown_background();
-                    if let Err(error) = &result {
-                        let _ = store.record_chat_error(&session, &request, error);
-                    }
-                    result.map(|_| ())
-                })();
-                let _ = tx.send(Event::ChatFinished(job_id, result));
-            });
-        });
-    }
+    bind_chat_send(&ui, state.clone());
     {
         let weak = ui.as_weak();
         let state = state.clone();
@@ -622,7 +806,11 @@ pub fn run() -> anyhow::Result<()> {
         ui.on_remove_attachment(move |id| {
             if let Some(ui) = weak.upgrade() {
                 let mut s = state.borrow_mut();
-                s.attachments.retain(|a| a.id != id.as_str());
+                s.conversations
+                    .entry(ui.get_selected_session().to_string())
+                    .or_default()
+                    .attachments
+                    .retain(|a| a.id != id.as_str());
                 refresh_attachments(&ui, &s);
             }
         });
@@ -707,17 +895,23 @@ pub fn run() -> anyhow::Result<()> {
             {
                 let mut s = state.borrow_mut();
                 if let Some(a) = s.animation.clone() {
-                    let job = s.jobs.begin();
+                    let session = ui.get_selected_session().to_string();
+                    let Some(job) = s.jobs.begin(&session) else {
+                        return;
+                    };
                     let cancel = job.cancel;
                     let job_id = job.id;
                     let path = PathBuf::from(ui.get_export_path().as_str());
                     let style = s.style.clone();
                     let tx = s.tx.clone();
                     let db = s.db.clone();
-                    let session = ui.get_selected_session().to_string();
                     let parent = s.animation_artifact.clone();
                     let case = ui.get_case_index();
-                    ui.set_busy(true);
+                    let view = s.conversations.entry(session.clone()).or_default();
+                    view.status = "正在导出 GIF…".into();
+                    view.error.clear();
+                    sync_current(&ui, &s);
+                    let _ = refresh_sessions(&ui, &s);
                     std::thread::spawn(move || {
                         let result =
                             crate::export::gif_cancellable_styled(&a, &path, 30, &cancel, &style)
@@ -771,98 +965,7 @@ pub fn run() -> anyhow::Result<()> {
             let mut s = tick_state.borrow_mut();
             update_preview_size(&ui, &mut s);
             while let Ok(event) = s.rx.try_recv() {
-                match event {
-                    Event::Preview {
-                        animation,
-                        epoch,
-                        frame,
-                    } => {
-                        if s.preview_epoch == epoch
-                            && s.animation
-                                .as_ref()
-                                .is_some_and(|a| Arc::ptr_eq(a, &animation))
-                        {
-                            match frame {
-                                Ok(pixels) => {
-                                    ui.set_frame_pixel_width(pixels.width() as i32);
-                                    ui.set_frame_pixel_height(pixels.height() as i32);
-                                    ui.set_frame(slint::Image::from_rgba8_premultiplied(pixels));
-                                }
-                                Err(error) => {
-                                    s.player.playing = false;
-                                    s.preview_epoch = s.preview_epoch.wrapping_add(1);
-                                    show_error(&ui, error);
-                                }
-                            }
-                        }
-                    }
-                    Event::Progress(job, message) => {
-                        if !s.jobs.is_current(job) {
-                            continue;
-                        }
-                        ui.set_status_text(message.into());
-                        let _ = refresh_chat(&ui, &s);
-                    }
-                    Event::ChatFinished(job, result) => {
-                        if !s.jobs.finish(job) {
-                            let _ = refresh_sessions(&ui, &s.db);
-                            continue;
-                        }
-                        ui.set_busy(false);
-                        match result {
-                            Ok(()) => ui.set_status_text("回复完成".into()),
-                            Err(error) => show_error(&ui, error),
-                        }
-                        let _ = refresh_chat(&ui, &s);
-                        let _ = refresh_sessions(&ui, &s.db);
-                    }
-                    Event::Attached(result) => {
-                        s.file_pending = false;
-                        match result {
-                            Ok(files) => {
-                                if s.attachments.len() + files.len() > 8 {
-                                    show_error(
-                                        &ui,
-                                        AppError::validation(
-                                            "Attachment",
-                                            "At most eight files per message.",
-                                        ),
-                                    );
-                                } else {
-                                    let mut composer = ui.get_composer().to_string();
-                                    if composer.ends_with('@') {
-                                        composer.pop();
-                                    }
-                                    for file in files {
-                                        if !s
-                                            .attachments
-                                            .iter()
-                                            .any(|a| a.sha256 == file.sha256 && a.name == file.name)
-                                        {
-                                            composer.push_str(&format!("@{} ", file.name));
-                                            s.attachments.push(file);
-                                        }
-                                    }
-                                    ui.set_composer(composer.into());
-                                    refresh_attachments(&ui, &s);
-                                }
-                            }
-                            Err(error) => show_error(&ui, error),
-                        }
-                    }
-                    Event::Exported(job, result) => {
-                        if !s.jobs.finish(job) {
-                            continue;
-                        }
-                        ui.set_busy(false);
-                        match result {
-                            Ok(path) => {
-                                ui.set_status_text(format!("已导出 {}", path.display()).into())
-                            }
-                            Err(error) => show_error(&ui, error),
-                        }
-                    }
-                }
+                handle_event(&ui, &mut s, event);
             }
             let now = Instant::now();
             let elapsed = now.duration_since(s.last).as_secs_f64();
@@ -882,7 +985,7 @@ pub fn run() -> anyhow::Result<()> {
         },
     );
     ui.run()?;
-    state.borrow_mut().jobs.stop();
+    state.borrow_mut().jobs.stop_all();
     Ok(())
 }
 
@@ -913,6 +1016,7 @@ mod tests {
                     id: i.to_string().into(),
                     title: format!("会话 {i}").into(),
                     status: "ready".into(),
+                    busy: false,
                 })
                 .collect::<Vec<_>>(),
         )));
@@ -1010,8 +1114,7 @@ mod tests {
             animation: None,
             bundle: None,
             animation_artifact: String::new(),
-            attachments: vec![],
-            file_pending: false,
+            conversations: HashMap::default(),
             preview: preview::PreviewWorker::new(tx.clone()),
             preview_epoch: 0,
             style: Arc::default(),
@@ -1038,23 +1141,79 @@ mod tests {
             assert_eq!(ui.get_composer(), "保留的草稿");
             assert_eq!(ui.get_messages().row_count(), 1);
         }
-        let stopped = state.borrow_mut().jobs.begin();
-        ui.set_busy(true);
+        let stopped = state.borrow_mut().jobs.begin(&first).unwrap();
+        state
+            .borrow_mut()
+            .conversations
+            .entry(first.clone())
+            .or_default()
+            .status = "first pending".into();
+        sync_current(&ui, &state.borrow());
+        ui.invoke_select_session(second.clone().into());
+        assert_eq!(ui.get_selected_session(), second);
+        assert!(!ui.get_busy());
+        assert!(!stopped.cancel.load(std::sync::atomic::Ordering::Relaxed));
+        ui.set_composer("第二个会话的草稿".into());
+        let next = state.borrow_mut().jobs.begin(&second).unwrap();
+        state
+            .borrow_mut()
+            .conversations
+            .entry(second.clone())
+            .or_default()
+            .status = "second pending".into();
+        sync_current(&ui, &state.borrow());
+        assert!(ui.get_busy());
+        ui.invoke_new_session();
+        assert!(!ui.get_busy());
+        ui.set_composer("新对话的草稿".into());
+        assert!(state.borrow().jobs.busy(&first) && state.borrow().jobs.busy(&second));
+        ui.invoke_select_session(first.clone().into());
+        assert!(ui.get_busy());
+        assert_eq!(ui.get_composer(), "保留的草稿");
+        assert_eq!(ui.get_status_text(), "first pending");
         ui.invoke_cancel();
         assert!(!ui.get_busy());
         assert!(stopped.cancel.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(!next.cancel.load(std::sync::atomic::Ordering::Relaxed));
         ui.invoke_select_session(second.clone().into());
         assert_eq!(ui.get_selected_session(), second);
-        assert_eq!(ui.get_status_text(), "就绪");
-        let next = state.borrow_mut().jobs.begin();
-        ui.set_busy(true);
-        assert!(!state.borrow_mut().jobs.finish(stopped.id));
+        assert_eq!(ui.get_composer(), "第二个会话的草稿");
+        handle_event(
+            &ui,
+            &mut state.borrow_mut(),
+            Event::Progress(stopped.id, "stale".into()),
+        );
+        handle_event(
+            &ui,
+            &mut state.borrow_mut(),
+            Event::ChatFinished(stopped.id, Err(crate::agent::cancelled())),
+        );
         assert!(ui.get_busy());
-        assert!(state.borrow().jobs.is_current(next.id));
-        ui.invoke_cancel();
+        assert_eq!(ui.get_status_text(), "second pending");
+        // Finish B while A is selected: B's response must not replace A's messages or draft.
+        ui.invoke_select_session(first.clone().into());
+        store
+            .append_message(
+                &second,
+                &chat::Message::new("assistant", "second reply".into(), vec![]),
+            )
+            .unwrap();
+        handle_event(
+            &ui,
+            &mut state.borrow_mut(),
+            Event::ChatFinished(next.id, Ok(())),
+        );
+        assert_eq!(ui.get_selected_session(), first);
+        assert_eq!(ui.get_composer(), "保留的草稿");
+        assert_eq!(ui.get_messages().row_count(), 1);
+        ui.invoke_select_session(second.clone().into());
+        assert!(!ui.get_busy());
+        assert_eq!(ui.get_status_text(), "回复完成");
+        assert_eq!(ui.get_messages().row_count(), 1);
         ui.invoke_delete_session();
         assert_eq!(ui.get_selected_session(), "");
         assert_eq!(store.list().unwrap().len(), 1);
         assert!(store.chat_animation(&first, &artifact).is_ok());
+        assert_eq!(ui.get_composer(), "新对话的草稿");
     }
 }

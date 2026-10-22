@@ -19,6 +19,7 @@ Open **模型设置**, configure OpenAI, DeepSeek or a compatible endpoint, then
 ## Features
 
 - Persistent conversations with Markdown, code blocks, tables and attachment snapshots.
+- Concurrent AI replies across conversations, with independent drafts and cancellation.
 - Optional AI-triggered code verification and animation; no algorithm/sample forms.
 - Portable JavaScript VM with time, memory and stack limits; no host file/network/process APIs or Docker.
 - Normal, boundary and adversarial checks; separate animation timelines for each case.

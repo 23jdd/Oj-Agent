@@ -17,6 +17,10 @@ palette and button treatment guide the native Slint components; React is not use
   to an application-local page with case selection and playback, then back to chat.
   No browser, HTTP link or web server is involved in animation navigation.
   History can be collapsed; settings and message content scroll at compact sizes.
+- Conversation navigation and new conversations remain enabled during AI replies.
+  Busy controls, cancellation, drafts, attachments, errors and worker events belong
+  to individual conversations. Switching conversations does not stop background
+  replies; show their running state in history without changing the visible chat.
 - Model settings must not shrink or clip the main layout. Avoid large decorative
   graphics, gradients, glow and continuous UI animations.
 - The desktop window is frameless. Its header uses Slint's native `WindowMoveArea`,
