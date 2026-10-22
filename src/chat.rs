@@ -107,6 +107,12 @@ pub async fn respond(
 ) -> Result<Message> {
     let model = RigModel::new(config)?;
     let messages = store.messages(session)?;
+    let turn_id = messages
+        .iter()
+        .rev()
+        .find(|message| message.role == "user")
+        .map(|message| message.id.clone())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let mut context = vec![];
     let mut budget = 0;
     for message in messages.iter().rev().take(32) {
@@ -131,7 +137,7 @@ pub async fn respond(
     let mut history = json!({"older_messages_omitted": context.len() < messages.len(), "messages":context,"tool_results":[]});
     let mut reports = BTreeMap::<String, (oj_sandbox::Report, String)>::new();
     let mut links = BTreeMap::<String, String>::new();
-    for _round in 0..8 {
+    for _round in 0..config.request.max_rounds {
         agent::check_cancelled(&cancel)?;
         progress("AI 正在回复…");
         let prompt = history.to_string();
@@ -143,7 +149,24 @@ pub async fn respond(
                 "Conversation context exceeds 2 MB; start a new conversation or use smaller attachments.",
             ));
         }
-        let response = model.chat_completion(&prompt, &cancel).await?;
+        let response = model
+            .chat_completion_with_progress(
+                &prompt,
+                &cancel,
+                |usage| {
+                    let record = crate::usage::UsageRecord::new(
+                        &turn_id,
+                        config.provider.clone(),
+                        config.model.clone(),
+                        usage.into(),
+                    );
+                    store.record_token_usage(session, &record)?;
+                    progress("AI 正在处理回复…");
+                    Ok(())
+                },
+                |status| progress(status),
+            )
+            .await?;
         agent::check_cancelled(&cancel)?;
         let turn = match parse_turn(&response) {
             Ok(turn) => turn,
@@ -235,7 +258,10 @@ pub async fn respond(
         "CHAT_TOOL_LIMIT",
         "Agent",
         "Chat",
-        "AI reached the 8-round limit. Completed verification and animation artifacts are retained; ask it to continue.",
+        format!(
+            "AI reached the {}-round limit. Completed verification and animation artifacts are retained; ask it to continue or adjust model settings.",
+            config.request.max_rounds
+        ),
     ))
 }
 fn execute_tool(

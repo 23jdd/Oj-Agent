@@ -24,6 +24,27 @@ fn mock(
     count: usize,
     response: impl Fn(usize, &Value) -> Value + Send + 'static,
 ) -> (ModelConfig, thread::JoinHandle<Vec<Value>>) {
+    mock_metered(count, move |index, request| {
+        (response(index, request), None)
+    })
+}
+fn mock_metered(
+    count: usize,
+    response: impl Fn(usize, &Value) -> (Value, Option<Value>) + Send + 'static,
+) -> (ModelConfig, thread::JoinHandle<Vec<Value>>) {
+    mock_raw(count, move |index, request| {
+        let (turn, usage) = response(index, request);
+        let mut body = json!({"id":"chat","object":"chat.completion","created":0,"model":"mock","choices":[{"index":0,"message":{"role":"assistant","content":turn.to_string()},"finish_reason":"stop"}]});
+        if let Some(usage) = usage {
+            body["usage"] = usage;
+        }
+        body
+    })
+}
+fn mock_raw(
+    count: usize,
+    response: impl Fn(usize, &Value) -> Value + Send + 'static,
+) -> (ModelConfig, thread::JoinHandle<Vec<Value>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}/v1", listener.local_addr().unwrap());
     let thread = thread::spawn(move || {
@@ -58,8 +79,7 @@ fn mock(
                 bytes.extend_from_slice(&buffer[..n]);
             }
             let request: Value = serde_json::from_slice(&bytes[header..header + size]).unwrap();
-            let turn = response(index, &request);
-            let body=json!({"id":"chat","object":"chat.completion","created":0,"model":"mock","choices":[{"index":0,"message":{"role":"assistant","content":turn.to_string()},"finish_reason":"stop"}]}).to_string();
+            let body = response(index, &request).to_string();
             write!(socket,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).unwrap();
             requests.push(request);
         }
@@ -71,9 +91,144 @@ fn mock(
             model: "mock".into(),
             endpoint,
             api_key: "test-only-key".into(),
+            request: Default::default(),
         },
         thread,
     )
+}
+
+fn reported_usage() -> Value {
+    json!({"prompt_tokens":10,"completion_tokens":20,"total_tokens":30,
+        "prompt_tokens_details":{"cached_tokens":4},"completion_tokens_details":{"reasoning_tokens":7}})
+}
+
+#[tokio::test]
+async fn configured_round_limit_stops_repairs_and_is_explained_to_the_model() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("round limit").unwrap();
+    store
+        .append_message(&session, &Message::new("user", "question".into(), vec![]))
+        .unwrap();
+    let (mut config, server) = mock(1, |_, _| json!({"invalid":true}));
+    config.request.max_rounds = 1;
+    let error = chat::respond(&mut store, &session, &config, Arc::default(), |_| {})
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "CHAT_TOOL_LIMIT");
+    assert!(error.message.contains("1-round"));
+    let requests = server.join().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].to_string().contains("within 1 rounds"));
+}
+
+#[tokio::test]
+async fn recovery_saves_only_the_final_answer_and_counts_usage_from_both_requests() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("empty response recovery").unwrap();
+    store
+        .append_message(&session, &Message::new("user", "question".into(), vec![]))
+        .unwrap();
+    let (mut config, server) = mock_raw(2, |index, _| {
+        let message = if index == 0 {
+            json!({"role":"assistant","content":null,"reasoning_content":"private-reasoning-not-a-chat-message"})
+        } else {
+            json!({"role":"assistant","content":json!({"markdown":"完整正文。","tool_calls":[],"done":true}).to_string()})
+        };
+        json!({"id":"chat","object":"chat.completion","created":0,"model":"mock",
+            "choices":[{"index":0,"message":message,"finish_reason":if index==0 {"length"} else {"stop"}}],
+            "usage":reported_usage()})
+    });
+    config.provider = Provider::DeepSeek;
+    let answer = chat::respond(&mut store, &session, &config, Arc::default(), |_| {})
+        .await
+        .unwrap();
+    assert_eq!(answer.markdown, "完整正文。");
+    let messages = store.messages(&session).unwrap();
+    assert_eq!(messages.len(), 2);
+    assert!(
+        !serde_json::to_string(&messages)
+            .unwrap()
+            .contains("private-reasoning-not-a-chat-message")
+    );
+    let usage = store.token_usage(&session).unwrap();
+    assert_eq!(usage.responses, 2);
+    assert_eq!(usage.total.tokens, 60);
+    let requests = server.join().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1]["thinking"]["type"], "disabled");
+}
+
+#[tokio::test]
+async fn token_usage_counts_repairs_and_tool_rounds_without_double_counting_details() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("usage").unwrap();
+    store
+        .append_message(&session, &Message::new("user", "verify".into(), vec![]))
+        .unwrap();
+    let (config, server) = mock_metered(3, |index, _| {
+        let turn = match index {
+            0 => json!({"invalid":"repair this response"}),
+            1 => {
+                json!({"markdown":"","tool_calls":[{"name":"sandbox.verify","arguments":request()}],"done":false})
+            }
+            _ => json!({"markdown":"已验证。","tool_calls":[],"done":true}),
+        };
+        (turn, Some(reported_usage()))
+    });
+    chat::respond(&mut store, &session, &config, Arc::default(), |_| {})
+        .await
+        .unwrap();
+    let usage = store.token_usage(&session).unwrap();
+    assert_eq!(usage.responses, 3);
+    assert_eq!(usage.input.tokens, 30);
+    assert_eq!(usage.output.tokens, 60);
+    assert_eq!(usage.total.tokens, 90);
+    assert_eq!(usage.cached_input.tokens, 12);
+    assert_eq!(usage.reasoning.tokens, 21);
+    assert!(!usage.label().contains('≥'));
+    server.join().unwrap();
+}
+
+#[tokio::test]
+async fn cancelled_or_failed_turns_keep_usage_already_returned_by_the_provider() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("cancelled usage").unwrap();
+    store
+        .append_message(&session, &Message::new("user", "question".into(), vec![]))
+        .unwrap();
+    let (config, server) = mock_metered(1, |_, _| {
+        (
+            json!({"markdown":"reply","tool_calls":[],"done":true}),
+            Some(reported_usage()),
+        )
+    });
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let flag = cancel.clone();
+    let error = chat::respond(&mut store, &session, &config, cancel, move |message| {
+        if message == "AI 正在处理回复…" {
+            flag.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+    })
+    .await
+    .unwrap_err();
+    assert_eq!(error.kind, "Cancelled");
+    assert_eq!(store.messages(&session).unwrap().len(), 1);
+    assert_eq!(store.token_usage(&session).unwrap().total.tokens, 30);
+    server.join().unwrap();
+    let failed = store.create_chat("failed usage").unwrap();
+    store
+        .append_message(&failed, &Message::new("user", "question".into(), vec![]))
+        .unwrap();
+    let (config, server) =
+        mock_metered(8, |_, _| (json!({"invalid":true}), Some(reported_usage())));
+    assert!(
+        chat::respond(&mut store, &failed, &config, Arc::default(), |_| {})
+            .await
+            .is_err()
+    );
+    assert_eq!(store.token_usage(&failed).unwrap().total.tokens, 240);
+    assert_eq!(store.token_usage(&session).unwrap().total.tokens, 30);
+    server.join().unwrap();
 }
 fn prompt(request: &Value) -> Value {
     let messages = request["messages"].as_array().unwrap();
@@ -170,6 +325,10 @@ async fn conversation_preserves_context_and_can_answer_without_animation() {
     assert!(!result.markdown.contains("oj-animation:"));
     assert!(store.artifacts(&session).unwrap().is_empty());
     assert_eq!(store.messages(&session).unwrap().len(), 4);
+    let usage = store.token_usage(&session).unwrap();
+    assert_eq!(usage.responses, 1);
+    assert_eq!(usage.total.reported, 0);
+    assert!(usage.label().contains("未上报"));
     server.join().unwrap();
 }
 #[tokio::test]

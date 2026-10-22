@@ -1,5 +1,5 @@
 use crate::{
-    agent::{ModelConfig, Provider},
+    agent::Provider,
     animation::Player,
     chat::{self, AnimationBundle, Attachment},
     error::{AppError, Result},
@@ -24,6 +24,7 @@ mod appearance;
 mod concurrency_tests;
 mod conversations;
 mod jobs;
+mod model_settings;
 mod preview;
 
 pub fn data_dir() -> Result<PathBuf> {
@@ -54,6 +55,7 @@ enum Event {
     },
     Progress(uuid::Uuid, String),
     ChatFinished(uuid::Uuid, Result<()>),
+    UsageChanged(String),
     Attached {
         session: String,
         request: uuid::Uuid,
@@ -62,6 +64,7 @@ enum Event {
     Exported(uuid::Uuid, Result<PathBuf>),
 }
 struct State {
+    model: ModelSettings,
     animation: Option<Arc<AnimationIr>>,
     bundle: Option<AnimationBundle>,
     animation_artifact: String,
@@ -159,6 +162,16 @@ fn refresh_chat(ui: &AppWindow, state: &State) -> Result<()> {
     if changed {
         ui.invoke_reveal_latest();
     }
+    refresh_token_usage(ui, state)
+}
+fn refresh_token_usage(ui: &AppWindow, state: &State) -> Result<()> {
+    let session = ui.get_selected_session();
+    let text = if session.is_empty() {
+        String::new()
+    } else {
+        SqliteStore::open(&state.db)?.token_usage(&session)?.label()
+    };
+    ui.set_token_usage(text.into());
     Ok(())
 }
 fn refresh_attachments(ui: &AppWindow, state: &State) {
@@ -336,6 +349,22 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
     {
         let weak = ui.as_weak();
         let state = state.clone();
+        ui.on_clear_error(move || {
+            if let Some(ui) = weak.upgrade() {
+                if let Some(view) = state
+                    .borrow_mut()
+                    .conversations
+                    .get_mut(ui.get_selected_session().as_str())
+                {
+                    view.error.clear();
+                }
+                ui.set_error_text("".into());
+            }
+        });
+    }
+    {
+        let weak = ui.as_weak();
+        let state = state.clone();
         ui.on_cancel(move || {
             if let Some(ui) = weak.upgrade() {
                 let mut state = state.borrow_mut();
@@ -347,6 +376,7 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
                 }
                 sync_current(&ui, &state);
                 let _ = refresh_sessions(&ui, &state);
+                let _ = refresh_token_usage(&ui, &state);
             }
         });
     }
@@ -530,6 +560,13 @@ fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
         Event::ChatFinished(job, result) => {
             finish_job(ui, s, job, result.map(|()| "回复完成".into()));
         }
+        Event::UsageChanged(session) => {
+            if ui.get_selected_session() == session
+                && let Err(error) = refresh_token_usage(ui, s)
+            {
+                show_error(ui, error);
+            }
+        }
         Event::Attached {
             session,
             request,
@@ -598,15 +635,11 @@ fn bind_chat_send(ui: &AppWindow, state: Rc<RefCell<State>>) {
             if ui.get_busy() {
                 return;
             }
-            let config = ModelConfig {
-                provider: provider_from_index(ui.get_provider_index()),
-                model: ui.get_model_name().into(),
-                endpoint: ui.get_endpoint().into(),
-                api_key: ui.get_api_key().into(),
-            };
+            let config = state.borrow().model.model_config();
             if let Err(error) = config.validate() {
                 ui.set_style_open(false);
-                ui.set_settings_open(true);
+                ui.invoke_open_model();
+                ui.set_settings_error(error.to_string().into());
                 show_error(&ui, error);
                 return;
             }
@@ -691,6 +724,7 @@ fn bind_chat_send(ui: &AppWindow, state: Rc<RefCell<State>>) {
                     }
                     result.map(|_| ())
                 })();
+                let _ = tx.send(Event::UsageChanged(session));
                 let _ = tx.send(Event::ChatFinished(job_id, result));
             });
         });
@@ -721,15 +755,13 @@ pub fn run() -> anyhow::Result<()> {
         Ok(model) => (model, None),
         Err(error) => (ModelSettings::default(), Some(error)),
     };
-    ui.set_provider_index(provider_index(&model.provider));
-    ui.set_model_name(model.model.clone().into());
-    ui.set_endpoint(model.endpoint.clone().into());
-    ui.set_api_key(model.api_key.clone().into());
+    model_settings::apply(&ui, &model);
     ui.set_model_config_path(model_path.display().to_string().into());
     let db = database_path()?;
     SqliteStore::open(&db)?.recover_interrupted()?;
     let (tx, rx) = mpsc::channel();
     let state = Rc::new(RefCell::new(State {
+        model,
         animation: None,
         bundle: None,
         animation_artifact: String::new(),
@@ -752,30 +784,7 @@ pub fn run() -> anyhow::Result<()> {
     if let Some(error) = style_error.or(model_error) {
         show_error(&ui, error);
     }
-    {
-        let weak = ui.as_weak();
-        let path = model_path.clone();
-        ui.on_save_model(move || {
-            if let Some(ui) = weak.upgrade() {
-                let settings = ModelSettings {
-                    version: crate::settings::VERSION,
-                    provider: provider_from_index(ui.get_provider_index()),
-                    model: ui.get_model_name().into(),
-                    endpoint: ui.get_endpoint().into(),
-                    api_key: ui.get_api_key().into(),
-                };
-                match settings.save(&path) {
-                    Ok(()) => {
-                        ui.set_settings_open(false);
-                        ui.set_settings_error("".into());
-                        ui.set_error_text("".into());
-                        ui.set_status_text("模型配置已保存".into());
-                    }
-                    Err(error) => ui.set_settings_error(error.to_string().into()),
-                }
-            }
-        });
-    }
+    model_settings::bind(&ui, state.clone(), model_path);
     bind_chat_send(&ui, state.clone());
     {
         let weak = ui.as_weak();
@@ -1010,6 +1019,8 @@ mod tests {
         let ui = AppWindow::new().unwrap();
         ui.set_selected_session("one".into());
         ui.set_composer("尚未发送的草稿".into());
+        let usage = "本会话 Token：输入 ≥123456 · 输出 ≥654321 · 合计 ≥777777 · 缓存命中 ≥12345 · 缓存写入 ≥23456 · 推理 ≥34567（含未上报用量）";
+        ui.set_token_usage(usage.into());
         ui.set_sessions(ModelRc::new(VecModel::from(
             (0..40)
                 .map(|i| SessionItem {
@@ -1046,7 +1057,7 @@ mod tests {
             i_slint_backend_testing::mock_elapsed_time(Duration::from_millis(200));
             slint::platform::update_timers_and_animations();
             ui.set_animation_open(false);
-            for label in ["消息输入", "删除对话", "发送 ↑"] {
+            for label in ["消息输入", "删除对话", "发送 ↑", usage] {
                 let element = ElementHandle::find_by_accessible_label(&ui, label)
                     .next()
                     .unwrap_or_else(|| panic!("Missing {label}"));
@@ -1111,6 +1122,7 @@ mod tests {
             .unwrap();
         let (tx, rx) = mpsc::channel();
         let state = Rc::new(RefCell::new(State {
+            model: ModelSettings::default(),
             animation: None,
             bundle: None,
             animation_artifact: String::new(),

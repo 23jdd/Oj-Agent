@@ -55,6 +55,7 @@ export component AppButton inherits Rectangle {
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { focus.focus(); root.clicked(); } }
 }
 export component IconButton inherits AppButton {
     icon-only: true;
@@ -262,4 +263,22 @@ export component Panel inherits Rectangle {
     background: Theme.surface; border-color: Theme.border; border-radius: Theme.radius-sm; border-width: Theme.border-width;
     clip: true;
     @children
+}
+
+export component ErrorNotice inherits Panel {
+    in property <string> message;
+    in property <string> clear-label: "清除错误提示";
+    callback dismissed;
+    height: Theme.control-height + 2 * Theme.spacing-sm;
+    HorizontalLayout {
+        padding: Theme.spacing-sm; spacing: Theme.spacing-md;
+        ScrollView {
+            min-width: 0px; horizontal-stretch: 1;
+            content-width: self.visible-width;
+            VerticalLayout {
+                Text { text: root.message; color: Theme.danger; font-size: Theme.label-size; wrap: word-wrap; accessible-role: text; accessible-label: root.message; }
+            }
+        }
+        AppButton { text: "清除提示"; accessible-label: root.clear-label; width: 104px; horizontal-stretch: 0; clicked => { root.dismissed(); } }
+    }
 }

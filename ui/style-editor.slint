@@ -1,6 +1,6 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { AppButton, SelectBox, SectionLabel, Divider } from "components.slint";
+import { AppButton, SelectBox, SectionLabel, Divider, ErrorNotice } from "components.slint";
 import { NumberStepper, ColorField } from "style-controls.slint";
 
 export struct StyleField {
@@ -27,6 +27,7 @@ export component StyleEditor inherits Rectangle {
     callback save;
     callback reset;
     callback cancel;
+    callback dismiss-error;
     background: Theme.surface;
     VerticalLayout {
         padding: Theme.spacing-xl; spacing: Theme.spacing-md;
@@ -123,7 +124,7 @@ export component StyleEditor inherits Rectangle {
             }
         }
         if root.font-pending: SectionLabel { text: "正在选择和读取字体…"; }
-        if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Theme.label-size; wrap: word-wrap; max-height: 48px; }
+        if root.error != "": ErrorNotice { message: root.error; clear-label: "清除外观错误提示"; dismissed => { root.dismiss-error(); } }
         Divider {}
         Text { text: "配置文件：" + root.config-path; color: Theme.text-secondary; font-size: Theme.label-size; overflow: elide; }
         HorizontalLayout {

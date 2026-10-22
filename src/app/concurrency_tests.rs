@@ -7,6 +7,7 @@ use std::{
 fn state(db: PathBuf) -> Rc<RefCell<State>> {
     let (tx, rx) = mpsc::channel();
     Rc::new(RefCell::new(State {
+        model: ModelSettings::default(),
         animation: None,
         bundle: None,
         animation_artifact: String::new(),
@@ -24,6 +25,151 @@ fn state(db: PathBuf) -> Rc<RefCell<State>> {
         tx,
         db,
     }))
+}
+
+#[test]
+fn clearing_an_error_survives_navigation_and_preserves_other_conversations_and_history() {
+    i_slint_backend_testing::init_no_event_loop();
+    let directory = tempfile::tempdir().unwrap();
+    let db = directory.path().join("sessions.sqlite3");
+    let mut store = SqliteStore::open(&db).unwrap();
+    let first = store.create_chat("first").unwrap();
+    let second = store.create_chat("second").unwrap();
+    let error = AppError::new(
+        "TEST_FAILURE",
+        "ModelProvider",
+        "Chat",
+        "错误详情。".repeat(120),
+    );
+    store.record_error(&first, &error).unwrap();
+    let state = state(db.clone());
+    state
+        .borrow_mut()
+        .conversations
+        .entry(first.clone())
+        .or_default()
+        .error = error.to_string();
+    state
+        .borrow_mut()
+        .conversations
+        .entry(second.clone())
+        .or_default()
+        .error = "second error".into();
+    let job = state.borrow_mut().jobs.begin(&second).unwrap();
+    let ui = AppWindow::new().unwrap();
+    bind_conversation_navigation(&ui, state.clone());
+    ui.invoke_select_session(first.clone().into());
+    ui.set_composer("unsent draft".into());
+    ui.show().unwrap();
+    ui.window()
+        .dispatch_event(slint::platform::WindowEvent::Resized {
+            size: slint::LogicalSize::new(960., 640.),
+        });
+    let clear =
+        i_slint_backend_testing::ElementHandle::find_by_accessible_label(&ui, "清除错误提示")
+            .next()
+            .unwrap();
+    let position = clear.absolute_position();
+    let size = clear.size();
+    assert!(
+        position.x >= 0.
+            && position.y >= 0.
+            && position.x + size.width <= 961.
+            && position.y + size.height <= 641.
+    );
+    clear.invoke_accessible_default_action();
+    assert!(ui.get_error_text().is_empty());
+    assert!(state.borrow().conversations[&first].error.is_empty());
+    assert_eq!(ui.get_composer(), "unsent draft");
+    assert!(!job.cancel.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(state.borrow().jobs.busy(&second));
+    ui.invoke_select_session(second.clone().into());
+    assert_eq!(ui.get_error_text(), "second error");
+    ui.invoke_select_session(first.clone().into());
+    assert!(ui.get_error_text().is_empty());
+    assert_eq!(ui.get_composer(), "unsent draft");
+    let count: i64 = rusqlite::Connection::open(db)
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM errors WHERE session_id=?1",
+            [&first],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 1);
+    show_error(&ui, AppError::validation("Chat", "new failure"));
+    assert!(ui.get_error_text().contains("new failure"));
+    ui.invoke_clear_error();
+    assert!(ui.get_error_text().is_empty());
+    ui.hide().unwrap();
+}
+
+#[test]
+fn model_settings_save_validate_and_cancel_without_mutating_active_request_snapshots() {
+    i_slint_backend_testing::init_no_event_loop();
+    let directory = tempfile::tempdir().unwrap();
+    let state = state(directory.path().join("sessions.sqlite3"));
+    let ui = AppWindow::new().unwrap();
+    let path = directory.path().join("model.json");
+    model_settings::bind(&ui, state.clone(), path.clone());
+    let snapshot = state.borrow().model.model_config();
+    ui.invoke_open_model();
+    ui.set_api_key("test-key-only".into());
+    ui.set_timeout_secs("300".into());
+    ui.set_max_output_tokens("12000".into());
+    ui.set_recovery_output_tokens("24000".into());
+    ui.set_max_retries("not a number".into());
+    ui.invoke_save_model();
+    assert!(ui.get_settings_open());
+    assert!(ui.get_settings_error().contains("额外重试次数"));
+    i_slint_backend_testing::ElementHandle::find_by_accessible_label(&ui, "清除模型设置错误提示")
+        .next()
+        .unwrap()
+        .invoke_accessible_default_action();
+    assert!(ui.get_settings_error().is_empty());
+    assert_eq!(ui.get_max_retries(), "not a number");
+    assert!(!path.exists());
+    assert_eq!(state.borrow().model.request.timeout_secs, 90);
+    ui.set_max_retries("4".into());
+    ui.set_reasoning_index(2);
+    ui.invoke_save_model();
+    assert!(!ui.get_settings_open());
+    let saved = ModelSettings::load(&path).unwrap();
+    assert_eq!(saved.request.timeout_secs, 300);
+    assert_eq!(saved.request.max_output_tokens, 12000);
+    assert_eq!(saved.request, state.borrow().model.request);
+    assert_eq!(snapshot.request.timeout_secs, 90);
+    ui.invoke_open_model();
+    ui.set_timeout_secs("1".into());
+    ui.set_settings_open(false); // The cancel action only closes the draft.
+    ui.invoke_open_model();
+    assert_eq!(ui.get_timeout_secs(), "300");
+    ui.invoke_reset_request();
+    assert_eq!(ui.get_timeout_secs(), "90");
+    assert_eq!(ui.get_api_key(), "test-key-only");
+    assert_eq!(state.borrow().model.request.timeout_secs, 300);
+    ui.set_busy(true); // Editing settings must remain possible during another reply.
+    ui.show().unwrap();
+    ui.window()
+        .dispatch_event(slint::platform::WindowEvent::Resized {
+            size: slint::LogicalSize::new(960., 640.),
+        });
+    for label in ["保存模型设置", "取消模型设置", "关闭窗口", "最小化"] {
+        let element = i_slint_backend_testing::ElementHandle::find_by_accessible_label(&ui, label)
+            .next()
+            .unwrap();
+        let position = element.absolute_position();
+        let size = element.size();
+        assert_eq!(element.accessible_enabled(), Some(true));
+        assert!(
+            position.x >= 0.
+                && position.y >= 0.
+                && position.x + size.width <= 961.
+                && position.y + size.height <= 641.,
+            "{label}: {position:?} {size:?}"
+        );
+    }
+    ui.hide().unwrap();
 }
 fn read_request(socket: &mut TcpStream) -> String {
     socket
@@ -56,8 +202,10 @@ fn read_request(socket: &mut TcpStream) -> String {
 }
 fn reply(socket: &mut TcpStream, markdown: &str) {
     let content = serde_json::json!({"markdown":markdown,"tool_calls":[],"done":true}).to_string();
+    let input = if markdown == "reply A" { 100 } else { 200 };
     let body = serde_json::json!({"id":"local","object":"chat.completion","created":0,"model":"mock",
-        "choices":[{"index":0,"message":{"role":"assistant","content":content},"finish_reason":"stop"}]}).to_string();
+        "choices":[{"index":0,"message":{"role":"assistant","content":content},"finish_reason":"stop"}],
+        "usage":{"prompt_tokens":input,"completion_tokens":input/10,"total_tokens":input+input/10}}).to_string();
     write!(socket,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
 }
 fn finish_pending(ui: &AppWindow, state: &Rc<RefCell<State>>, session: &str) {
@@ -114,6 +262,7 @@ fn second_conversation_receives_a_reply_while_first_network_request_is_still_pen
     ui.set_model_name("mock".into());
     ui.set_endpoint(endpoint.into());
     ui.set_api_key("local-test-key".into());
+    state.borrow_mut().model = model_settings::read(&ui).unwrap();
     bind_conversation_navigation(&ui, state.clone());
     bind_chat_send(&ui, state.clone());
     ui.show().unwrap();
@@ -143,17 +292,22 @@ fn second_conversation_receives_a_reply_while_first_network_request_is_still_pen
     assert!(ui.get_busy(), "B finishing must not unlock A");
     assert_eq!(ui.get_selected_session(), first);
     assert_eq!(store.messages(&first).unwrap().len(), 1);
+    assert_eq!(store.token_usage(&first).unwrap().responses, 0);
+    assert_eq!(store.token_usage(&second).unwrap().total.tokens, 220);
     assert_eq!(store.messages(&second).unwrap()[1].markdown, "reply B");
     ui.invoke_select_session(second.clone().into());
     assert!(!ui.get_busy());
+    assert!(ui.get_token_usage().contains("合计 220"));
     ui.set_composer("B unsent draft".into());
     release_tx.send(()).unwrap();
     finish_pending(&ui, &state, &first);
     assert_eq!(ui.get_composer(), "B unsent draft");
     assert_eq!(ui.get_status_text(), "回复完成");
     assert_eq!(ui.get_messages().row_count(), 2);
+    assert!(ui.get_token_usage().contains("合计 220"));
     ui.invoke_select_session(first.clone().into());
     assert!(!ui.get_busy());
+    assert!(ui.get_token_usage().contains("合计 110"));
     assert_eq!(store.messages(&first).unwrap()[1].markdown, "reply A");
     server.join().unwrap();
 }

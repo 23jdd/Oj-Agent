@@ -21,8 +21,17 @@ palette and button treatment guide the native Slint components; React is not use
   Busy controls, cancellation, drafts, attachments, errors and worker events belong
   to individual conversations. Switching conversations does not stop background
   replies; show their running state in history without changing the visible chat.
+- Show the selected conversation's saved token totals in a wrapping footer using
+  semantic typography and colors. Keep the composer and history actions visible
+  at compact window sizes; background usage must not replace the selected totals.
+- Error banners share a scrollable notice with a keyboard-accessible clear action.
+  Dismissing a conversation's notice updates its view state without cancelling
+  jobs or deleting persisted errors. Model and appearance editors use the same notice.
 - Model settings must not shrink or clip the main layout. Avoid large decorative
   graphics, gradients, glow and continuous UI animations.
+  The model editor scrolls its connection and request-policy fields, keeping
+  validation errors and Save/Cancel visible. Edits remain drafts until saved;
+  changing settings does not alter requests already in progress.
 - The desktop window is frameless. Its header uses Slint's native `WindowMoveArea`,
   double-click to maximize/restore, and reusable icon controls for minimize,
   maximize/restore and close. Keep the 8px native resize region clear of controls.

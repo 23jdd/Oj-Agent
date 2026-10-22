@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY,document TEXT NOT NULL,cre
 CREATE TABLE IF NOT EXISTS preferences(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,document TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tool_calls(id TEXT PRIMARY KEY,session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,name TEXT NOT NULL,status TEXT NOT NULL,document TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS chat_messages(id TEXT PRIMARY KEY,session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,seq INTEGER NOT NULL,document TEXT NOT NULL,UNIQUE(session_id,seq));
+CREATE TABLE IF NOT EXISTS token_usage(id TEXT PRIMARY KEY,session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,document TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS token_usage_session ON token_usage(session_id);
 PRAGMA user_version=1;
 ").map_err(db)?;
         Ok(Self { conn })
@@ -90,6 +92,34 @@ PRAGMA user_version=1;
             )
             .map_err(db)?;
         Ok(())
+    }
+    pub fn record_token_usage(
+        &mut self,
+        session: &str,
+        record: &crate::usage::UsageRecord,
+    ) -> Result<()> {
+        // A deleted conversation must stay deleted even when its cancelled worker finishes.
+        self.conn.execute(
+            "INSERT INTO token_usage(id,session_id,document) SELECT ?1,?2,?3 WHERE EXISTS(SELECT 1 FROM sessions WHERE id=?2) ON CONFLICT(id) DO NOTHING",
+            params![record.id, session, serde_json::to_string(record).map_err(db)?],
+        ).map_err(db)?;
+        Ok(())
+    }
+    pub fn token_usage(&self, session: &str) -> Result<crate::usage::UsageTotals> {
+        let mut totals = crate::usage::UsageTotals::default();
+        let mut query = self
+            .conn
+            .prepare("SELECT document FROM token_usage WHERE session_id=?1")
+            .map_err(db)?;
+        let rows = query
+            .query_map([session], |row| row.get::<_, String>(0))
+            .map_err(db)?;
+        for row in rows {
+            let record: crate::usage::UsageRecord =
+                serde_json::from_str(&row.map_err(db)?).map_err(db)?;
+            totals.add(&record.usage);
+        }
+        Ok(totals)
     }
     pub fn create_chat(&mut self, title: &str) -> Result<String> {
         let id = uuid::Uuid::new_v4().to_string();

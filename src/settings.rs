@@ -3,7 +3,7 @@
 //! The file is user-private: Unix saves use mode 0600. `Debug` redacts the key
 //! so configuration errors and logs never print credentials.
 use crate::{
-    agent::Provider,
+    agent::{ModelConfig, Provider, config::RequestConfig},
     error::{AppError, Result},
 };
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ pub struct ModelSettings {
     pub model: String,
     pub endpoint: String,
     pub api_key: String,
+    pub request: RequestConfig,
 }
 impl Default for ModelSettings {
     fn default() -> Self {
@@ -31,6 +32,7 @@ impl Default for ModelSettings {
             model: "gpt-4.1-mini".into(),
             endpoint: String::new(),
             api_key: String::new(),
+            request: RequestConfig::default(),
         }
     }
 }
@@ -42,6 +44,7 @@ impl fmt::Debug for ModelSettings {
             .field("model", &self.model)
             .field("endpoint", &self.endpoint)
             .field("api_key", &"<redacted>")
+            .field("request", &self.request)
             .finish()
     }
 }
@@ -55,7 +58,17 @@ fn invalid(message: impl Into<String>) -> AppError {
     .recoverable()
 }
 impl ModelSettings {
+    pub fn model_config(&self) -> ModelConfig {
+        ModelConfig {
+            provider: self.provider.clone(),
+            model: self.model.clone(),
+            endpoint: self.endpoint.clone(),
+            api_key: self.api_key.clone(),
+            request: self.request.clone(),
+        }
+    }
     pub fn validate(&self) -> Result<()> {
+        self.request.validate()?;
         if self.version != VERSION {
             return Err(invalid("Unsupported model settings version; expected 1."));
         }
@@ -203,6 +216,42 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(settings.provider, Provider::DeepSeek);
+        assert_eq!(settings.request, RequestConfig::default());
+    }
+    #[test]
+    fn request_policy_round_trips_partial_defaults_and_invalid_saves_are_atomic() {
+        use crate::agent::config::ReasoningMode;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("model.json");
+        let mut settings: ModelSettings = serde_json::from_value(
+            serde_json::json!({"model":"custom", "request":{"timeout_secs":300,"max_retries":4}}),
+        )
+        .unwrap();
+        assert_eq!(settings.request.max_output_tokens, 8192);
+        settings.request.reasoning = ReasoningMode::Low;
+        settings.request.max_output_tokens = 24000;
+        settings.request.recovery_output_tokens = 32000;
+        settings.request.disable_thinking_on_recovery = false;
+        settings.save(&path).unwrap();
+        assert_eq!(ModelSettings::load(&path).unwrap(), settings);
+        let original = std::fs::read(&path).unwrap();
+        for (field, value) in [
+            ("timeout_secs", 0),
+            ("timeout_secs", 1801),
+            ("max_retries", 6),
+            ("retry_delay_ms", 30001),
+            ("max_output_tokens", 0),
+            ("recovery_output_tokens", 20000),
+            ("empty_response_retries", 6),
+            ("max_rounds", 0),
+            ("max_rounds", 33),
+        ] {
+            let mut document = serde_json::to_value(&settings).unwrap();
+            document["request"][field] = value.into();
+            let invalid: ModelSettings = serde_json::from_value(document).unwrap();
+            assert!(invalid.save(&path).is_err(), "{field}={value}");
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
     }
     #[test]
     fn debug_output_redacts_the_key() {

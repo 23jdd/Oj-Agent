@@ -9,6 +9,14 @@ named case timelines and verification basis. Application-local links resolve
 only inside their owning conversation. Existing session/IR records are retained.
 See [current chat workflow](docs/CHAT.md).
 
+The additive `token_usage` table stores one UUID-keyed record per returned chat
+model response, scoped to its conversation. Records contain the originating user
+message ID, provider, model and optional normalized token counters; no credentials
+or raw provider responses are stored. Repeated record IDs are ignored. Totals are
+computed from these records and survive restart. Deleting a conversation cascades
+to its usage; late cancelled workers cannot recreate deleted records. Existing
+messages are preserved, and historical usage cannot be backfilled.
+
 # Session Model Specification
 
 ## 1. Purpose

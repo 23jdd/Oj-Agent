@@ -1,0 +1,80 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, TextField, SelectBox, AppCheckBox, SectionLabel, Divider, ErrorNotice } from "components.slint";
+
+component RequestField inherits HorizontalLayout {
+    in property <string> label;
+    in-out property <string> value;
+    spacing: Theme.spacing-md;
+    SectionLabel { text: root.label; width: 280px; horizontal-stretch: 0; }
+    TextField { text <=> root.value; field-label: root.label; input-type: decimal; }
+}
+
+export component ModelEditor inherits VerticalLayout {
+    in-out property <int> provider-index;
+    in-out property <string> model-name;
+    in-out property <string> api-key;
+    in-out property <string> endpoint;
+    in-out property <string> timeout-secs: "90";
+    in-out property <string> max-retries: "2";
+    in-out property <string> retry-delay-ms: "500";
+    in-out property <string> max-output-tokens: "8192";
+    in-out property <string> recovery-output-tokens: "16384";
+    in-out property <string> empty-response-retries: "1";
+    in-out property <string> max-rounds: "8";
+    in-out property <int> reasoning-index: 0;
+    in-out property <bool> recovery-thinking-off: true;
+    in property <string> error;
+    in property <string> config-path;
+    callback save;
+    callback cancel;
+    callback reset-request;
+    callback dismiss-error;
+    padding: Theme.spacing-lg; spacing: Theme.spacing-md;
+    Text { text: "模型设置 / MODEL"; color: Theme.text-primary; font-size: Theme.heading-size; font-weight: 700; }
+    SectionLabel { text: "保存后用于新请求；正在进行的回复保持原配置。"; }
+    ScrollView {
+        min-height: 0px; preferred-height: 0px; vertical-stretch: 1;
+        content-width: self.visible-width;
+        VerticalLayout {
+            padding-right: Theme.spacing-sm; spacing: Theme.spacing-md;
+            SectionLabel { text: "服务商与模型"; font-weight: 700; }
+            HorizontalLayout {
+                spacing: Theme.spacing-md;
+                SelectBox { model: ["OpenAI", "DeepSeek", "兼容接口"]; current-index <=> root.provider-index; accessible-label: "服务商"; }
+                TextField { text <=> root.model-name; field-label: "模型名称"; placeholder-text: "Model ID"; }
+            }
+            SectionLabel { text: "API KEY"; }
+            TextField { text <=> root.api-key; field-label: "API Key"; input-type: password; placeholder-text: "输入服务商的 API Key"; }
+            SectionLabel { text: "接口地址 / ENDPOINT"; }
+            TextField { text <=> root.endpoint; field-label: "接口地址"; placeholder-text: "默认地址留空；兼容接口填写 /v1 地址"; }
+            Divider {}
+            SectionLabel { text: "响应与重试"; font-weight: 700; }
+            RequestField { label: "单次超时（秒，1–1800）"; value <=> root.timeout-secs; }
+            RequestField { label: "额外重试（0–5 次）"; value <=> root.max-retries; }
+            RequestField { label: "重试间隔（毫秒，0–30000）"; value <=> root.retry-delay-ms; }
+            RequestField { label: "输出 Token（1–262144）"; value <=> root.max-output-tokens; }
+            RequestField { label: "恢复输出 Token 上限"; value <=> root.recovery-output-tokens; }
+            RequestField { label: "无正文恢复（0–5 次）"; value <=> root.empty-response-retries; }
+            RequestField { label: "每条消息最大轮次（1–32）"; value <=> root.max-rounds; }
+            Text { text: "额外重试为 0 时只请求一次。无正文恢复占用重试次数。超时按每次请求计算；重试间隔逐次翻倍，最多 30 秒。"; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+            Divider {}
+            HorizontalLayout {
+                spacing: Theme.spacing-md;
+                SectionLabel { text: "思考强度"; width: 280px; horizontal-stretch: 0; }
+                SelectBox { model: ["跟随模型默认", "关闭", "低", "高", "最高"]; current-index <=> root.reasoning-index; accessible-label: "思考强度"; }
+            }
+            Text { text: "思考强度与 Token 上限须在模型支持范围内。恢复输出上限不能小于普通上限；思考也可能占用输出 Token。"; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+            AppCheckBox { text: "DeepSeek 无正文恢复时关闭思考"; checked <=> root.recovery-thinking-off; enabled: root.provider-index == 1; }
+            Text { text: "配置保存在本机；API Key 不写入会话。\n配置文件：" + root.config-path; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+        }
+    }
+    if root.error != "": ErrorNotice { message: root.error; clear-label: "清除模型设置错误提示"; dismissed => { root.dismiss-error(); } }
+    HorizontalLayout {
+        spacing: Theme.spacing-sm;
+        AppButton { text: "恢复请求默认值"; width: 152px; horizontal-stretch: 0; clicked => { root.reset-request(); } }
+        Rectangle { horizontal-stretch: 1; }
+        AppButton { text: "取消"; width: 96px; horizontal-stretch: 0; accessible-label: "取消模型设置"; clicked => { root.cancel(); } }
+        AppButton { text: "保存"; width: 96px; horizontal-stretch: 0; primary: true; accessible-label: "保存模型设置"; clicked => { root.save(); } }
+    }
+}

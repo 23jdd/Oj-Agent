@@ -292,6 +292,12 @@ pub fn apply(ui: &AppWindow, style: &StyleConfig) {
     theme.set_control_height(style.geometry.control_height);
 }
 pub fn bind(ui: &AppWindow, state: Rc<RefCell<State>>, path: PathBuf) {
+    let weak = ui.as_weak();
+    ui.on_clear_style_error(move || {
+        if let Some(ui) = weak.upgrade() {
+            ui.set_style_error("".into());
+        }
+    });
     ui.set_style_path(path.display().to_string().into());
     let weak = ui.as_weak();
     let current = state.clone();

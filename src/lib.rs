@@ -13,4 +13,5 @@ pub mod settings;
 pub mod style;
 pub mod tools;
 pub mod trace;
+pub mod usage;
 pub mod visualization;
