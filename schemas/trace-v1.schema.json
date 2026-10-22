@@ -1,0 +1,123 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "id": {
+      "type": "string"
+    },
+    "algorithm": {
+      "type": "string"
+    },
+    "trace_source": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "string"
+    },
+    "initial_state": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TraceEvent"
+      }
+    },
+    "final_state": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "id",
+    "algorithm",
+    "trace_source",
+    "confidence",
+    "initial_state",
+    "events",
+    "final_state"
+  ],
+  "title": "TraceIr",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "TraceEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "kind": {
+          "$ref": "#/$defs/EventKind"
+        },
+        "entity": {
+          "type": "string"
+        },
+        "indices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "state": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "id",
+        "seq",
+        "kind",
+        "entity",
+        "indices",
+        "values",
+        "explanation",
+        "state"
+      ]
+    },
+    "EventKind": {
+      "type": "string",
+      "enum": [
+        "read",
+        "write",
+        "compare",
+        "insert",
+        "remove",
+        "swap",
+        "push",
+        "pop",
+        "enqueue",
+        "dequeue",
+        "visit",
+        "branch",
+        "return"
+      ]
+    }
+  }
+}

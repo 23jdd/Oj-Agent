@@ -1,0 +1,46 @@
+[package]
+name = "oj-agent"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+description = "Deterministic algorithm animation workbench"
+license = "MIT"
+build = "build.rs"
+
+[workspace]
+members = ["crates/oj-runtime", "crates/oj-sandbox"]
+resolver = "3"
+
+[dependencies]
+anyhow = "1"
+oj-runtime = { path = "crates/oj-runtime" }
+oj-sandbox = { path = "crates/oj-sandbox" }
+sha2 = "0.10"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+directories = "6"
+gif = "0.14"
+pulldown-cmark = { version = "0.13", default-features = false }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
+jsonschema = { version = "0.46", default-features = false }
+nanosandbox = "0.3.3"
+rig = { package = "rig-core", version = "0.45", features = ["reqwest"] }
+rusqlite = { version = "0.38", features = ["bundled"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+skia-safe = "0.153.3"
+slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-winit", "renderer-skia", "compat-1-2"] }
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "sync"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[build-dependencies]
+slint-build = "=1.18.1"
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+lto = "thin"
+strip = true

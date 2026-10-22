@@ -1,0 +1,60 @@
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "algorithm": {
+      "$ref": "#/$defs/Algorithm"
+    },
+    "values": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "int64"
+      }
+    },
+    "target": {
+      "type": "integer",
+      "format": "int64"
+    },
+    "source_code": {
+      "type": "string",
+      "default": ""
+    },
+    "language": {
+      "type": "string",
+      "default": "python"
+    }
+  },
+  "required": [
+    "title",
+    "description",
+    "algorithm",
+    "values",
+    "target"
+  ],
+  "title": "ProblemInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Algorithm": {
+      "type": "string",
+      "enum": [
+        "array-traversal",
+        "two-sum",
+        "binary-search",
+        "bubble-sort",
+        "two-pointers",
+        "sliding-window",
+        "stack",
+        "queue",
+        "bfs",
+        "dfs",
+        "fibonacci"
+      ]
+    }
+  }
+}

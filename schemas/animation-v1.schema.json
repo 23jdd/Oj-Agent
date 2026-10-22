@@ -1,0 +1,183 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "id": {
+      "type": "string"
+    },
+    "scene": {
+      "$ref": "#/$defs/Scene"
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AnimationAction"
+      }
+    },
+    "duration": {
+      "type": "number",
+      "format": "double"
+    },
+    "step_times": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "id",
+    "scene",
+    "timeline",
+    "duration",
+    "step_times"
+  ],
+  "title": "AnimationIr",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Scene": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SceneObject"
+          }
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "objects"
+      ]
+    },
+    "SceneObject": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number",
+          "format": "float"
+        },
+        "y": {
+          "type": "number",
+          "format": "float"
+        },
+        "width": {
+          "type": "number",
+          "format": "float"
+        },
+        "height": {
+          "type": "number",
+          "format": "float"
+        },
+        "text": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "x",
+        "y",
+        "width",
+        "height",
+        "text",
+        "values",
+        "state"
+      ]
+    },
+    "AnimationAction": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "number",
+          "format": "double"
+        },
+        "duration": {
+          "type": "number",
+          "format": "double"
+        },
+        "action": {
+          "$ref": "#/$defs/Action"
+        },
+        "target": {
+          "type": "string"
+        },
+        "indices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "required": [
+        "at",
+        "duration",
+        "action",
+        "target",
+        "indices",
+        "text",
+        "values"
+      ]
+    },
+    "Action": {
+      "type": "string",
+      "enum": [
+        "highlight",
+        "update-text",
+        "update-value",
+        "show",
+        "hide",
+        "wait"
+      ]
+    }
+  }
+}

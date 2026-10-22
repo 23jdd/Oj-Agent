@@ -1,0 +1,243 @@
+use oj_agent::{
+    agent::{ModelConfig, Provider},
+    chat::{self, Message},
+    session::SqliteStore,
+};
+use serde_json::{Value, json};
+use std::{
+    io::{Read, Write},
+    net::TcpListener,
+    sync::Arc,
+    thread,
+    time::Duration,
+};
+
+const SOURCE: &str = "function solve(input,emit){ const a=[...input]; emit({values:a,explanation:'Initial'}); a.sort((x,y)=>x-y);emit({values:a,explanation:'Sorted'});return a;}";
+fn request() -> Value {
+    json!({"source":SOURCE,"cases":[
+        {"name":"mixed","category":"normal","input":[3,1,2],"expected":[1,2,3]},
+        {"name":"empty","category":"boundary","input":[],"expected":[]},
+        {"name":"duplicates and negatives","category":"adversarial","input":[2,-1,2,-1],"expected":[-1,-1,2,2]}
+    ]})
+}
+fn mock(
+    count: usize,
+    response: impl Fn(usize, &Value) -> Value + Send + 'static,
+) -> (ModelConfig, thread::JoinHandle<Vec<Value>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("http://{}/v1", listener.local_addr().unwrap());
+    let thread = thread::spawn(move || {
+        let mut requests = Vec::new();
+        for index in 0..count {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0; 8192];
+            let (header, size) = loop {
+                let n = socket.read(&mut buffer).unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&buffer[..n]);
+                if let Some(position) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let header = String::from_utf8_lossy(&bytes[..position]);
+                    let length = header
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length:")
+                                .map(|v| v.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap();
+                    break (position + 4, length);
+                }
+            };
+            while bytes.len() < header + size {
+                let n = socket.read(&mut buffer).unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&buffer[..n]);
+            }
+            let request: Value = serde_json::from_slice(&bytes[header..header + size]).unwrap();
+            let turn = response(index, &request);
+            let body=json!({"id":"chat","object":"chat.completion","created":0,"model":"mock","choices":[{"index":0,"message":{"role":"assistant","content":turn.to_string()},"finish_reason":"stop"}]}).to_string();
+            write!(socket,"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).unwrap();
+            requests.push(request);
+        }
+        requests
+    });
+    (
+        ModelConfig {
+            provider: Provider::Compatible,
+            model: "mock".into(),
+            endpoint,
+            api_key: "test-only-key".into(),
+        },
+        thread,
+    )
+}
+fn prompt(request: &Value) -> Value {
+    let messages = request["messages"].as_array().unwrap();
+    let content = &messages.iter().rev().find(|m| m["role"] == "user").unwrap()["content"];
+    let text = content.as_str().map(str::to_owned).unwrap_or_else(|| {
+        content
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p["text"].as_str())
+            .collect::<String>()
+    });
+    serde_json::from_str(&text).unwrap()
+}
+#[tokio::test]
+async fn conversation_preserves_context_and_can_answer_without_animation() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("chat").unwrap();
+    store
+        .append_message(&session, &Message::new("user", "前一个问题".into(), vec![]))
+        .unwrap();
+    store
+        .append_message(
+            &session,
+            &Message::new("assistant", "前一个回答".into(), vec![]),
+        )
+        .unwrap();
+    store
+        .append_message(&session, &Message::new("user", "继续解释".into(), vec![]))
+        .unwrap();
+    let (config, server) = mock(1, |_, req| {
+        assert_eq!(prompt(req)["messages"].as_array().unwrap().len(), 3);
+        json!({"markdown":"## 解释\n\n**普通回答**，无需动画。","tool_calls":[],"done":true})
+    });
+    let result = chat::respond(&mut store, &session, &config, Arc::default(), |_| {})
+        .await
+        .unwrap();
+    assert!(result.markdown.contains("普通回答"));
+    assert!(!result.markdown.contains("oj-animation:"));
+    assert!(store.artifacts(&session).unwrap().is_empty());
+    assert_eq!(store.messages(&session).unwrap().len(), 4);
+    server.join().unwrap();
+}
+#[tokio::test]
+async fn ai_tools_verify_cases_publish_local_animation_and_restore_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("chat.db");
+    let file = dir.path().join("sort.js");
+    std::fs::write(&file, SOURCE).unwrap();
+    let attachment = chat::files::attach(&file).unwrap();
+    std::fs::write(&file, "changed after attachment").unwrap();
+    assert_eq!(attachment.text, SOURCE);
+    let mut store = SqliteStore::open(&db).unwrap();
+    let session = store.create_chat("排序讨论").unwrap();
+    store
+        .append_message(
+            &session,
+            &Message::new("user", "@sort.js 检查并解释过程".into(), vec![attachment]),
+        )
+        .unwrap();
+    let (config, server) = mock(3, |index, req| {
+        let p = prompt(req);
+        match index {
+            0 => {
+                assert_eq!(p["messages"][0]["attachments"][0]["text"], SOURCE);
+                json!({"markdown":"","done":false,"tool_calls":[{"name":"sandbox.verify","arguments":request()}]})
+            }
+            1 => {
+                let id = &p["tool_results"][0]["result"]["data"]["verification_id"];
+                assert!(id.is_string());
+                json!({"markdown":"","done":false,"tool_calls":[{"name":"animation.create","arguments":{"verification_id":id,"title":"排序过程","layout":"array"}}]})
+            }
+            _ => {
+                let link = &p["tool_results"][1]["result"]["data"]["link"];
+                assert!(link.as_str().unwrap().starts_with("oj-animation:"));
+                json!({"markdown":format!("三个情况已检查。\n\n[打开动画]({})",link.as_str().unwrap()),"tool_calls":[],"done":true})
+            }
+        }
+    });
+    chat::respond(&mut store, &session, &config, Arc::default(), |_| {})
+        .await
+        .unwrap();
+    server.join().unwrap();
+    let artifact = store
+        .artifacts(&session)
+        .unwrap()
+        .into_iter()
+        .find(|a| a.kind == "chat-animation")
+        .unwrap();
+    let bundle = store.chat_animation(&session, &artifact.id).unwrap();
+    assert_eq!(bundle.cases.len(), 3);
+    assert!(bundle.basis.contains("原始 JavaScript"));
+    for case in &bundle.cases {
+        case.animation.validate().unwrap();
+        assert_eq!(case.animation.header.version, 2);
+    }
+    let other = store.create_chat("other").unwrap();
+    assert!(store.chat_animation(&other, &artifact.id).is_err());
+    drop(store);
+    let reopened = SqliteStore::open(&db).unwrap();
+    assert!(
+        reopened
+            .messages(&session)
+            .unwrap()
+            .last()
+            .unwrap()
+            .markdown
+            .contains(&artifact.id)
+    );
+    assert_eq!(
+        reopened
+            .chat_animation(&session, &artifact.id)
+            .unwrap()
+            .cases
+            .len(),
+        3
+    );
+}
+#[test]
+fn failed_or_insufficient_checks_cannot_be_published_and_attachments_are_bounded() {
+    let request: oj_sandbox::Request = serde_json::from_value(request()).unwrap();
+    let mut report = oj_sandbox::verify(&request, Arc::default()).unwrap();
+    report.passed = false;
+    assert!(
+        chat::animation::compile_verified(
+            &report,
+            "v",
+            "generated JS",
+            "test",
+            "array",
+            &Default::default()
+        )
+        .is_err()
+    );
+    report.passed = true;
+    report.cases.truncate(1);
+    assert!(
+        chat::animation::compile_verified(
+            &report,
+            "v",
+            "generated JS",
+            "test",
+            "array",
+            &Default::default()
+        )
+        .is_err()
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("binary");
+    std::fs::write(&file, [0, 1, 2]).unwrap();
+    assert!(chat::files::attach(&file).is_err());
+    std::fs::write(&file, vec![b'a'; 100_001]).unwrap();
+    assert!(chat::files::attach(&file).is_err());
+    assert!(
+        chat::parse_turn(
+            r#"{"markdown":"x","tool_calls":[{"name":"x","arguments":{}}],"done":true}"#
+        )
+        .is_err()
+    );
+    assert!(
+        oj_agent::tools::invoke(
+            "sandbox.verify",
+            &json!({"source":"function solve(){return 1;}","cases":[{"name":"one","category":"normal","input":null,"expected":1}]})
+        )["data"]["passed"]
+            == true
+    );
+}

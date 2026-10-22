@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "id": {
+      "type": "string"
+    },
+    "template": {
+      "type": "string"
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/VisualObject"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "id",
+    "template",
+    "objects"
+  ],
+  "title": "VisualizationIr",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "VisualObject": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "bind": {
+          "type": "string"
+        },
+        "placement": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "bind",
+        "placement"
+      ]
+    }
+  }
+}

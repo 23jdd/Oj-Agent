@@ -1,0 +1,42 @@
+import { Theme } from "theme.slint";
+import { AppButton, TextArea, SectionLabel, Panel, Divider } from "components.slint";
+
+export struct AttachmentItem { id: string, name: string }
+export struct MarkdownBlock { kind: string, raw: string, body: styled-text, lines: int }
+export struct ChatMessage { role: string, blocks: [MarkdownBlock], files: [AttachmentItem] }
+
+export component MessageView inherits Rectangle {
+    in property <ChatMessage> message;
+    callback open-link(string);
+    height: content.preferred-height;
+    vertical-stretch: 0;
+    content := VerticalLayout {
+        spacing: Theme.spacing-sm;
+        SectionLabel { text: root.message.role == "user" ? "你 / YOU" : root.message.role == "tool" ? "工具验证 / CHECKS" : "OJ AGENT"; font-weight: 700; color: Theme.text-primary; }
+        for file in root.message.files: SectionLabel { text: "@" + file.name; }
+        for block in root.message.blocks: VerticalLayout {
+            vertical-stretch: 0;
+            spacing: Theme.spacing-xs;
+            if block.kind == "code": TextArea {
+                text: block.raw; code: true; read-only: true;
+                height: clamp(block.lines * Theme.text-size * 1.5 + Theme.spacing-lg, 64px, 320px);
+                vertical-stretch: 0;
+            }
+            if block.kind == "divider": Divider {}
+            if block.kind != "code" && block.kind != "divider": HorizontalLayout {
+                spacing: Theme.spacing-sm;
+                if block.kind == "quote": Rectangle { width: Theme.border-width; background: Theme.border; }
+                StyledText {
+                    vertical-stretch: 0;
+                    text: block.body;
+                    default-font-family: Theme.font-family;
+                    default-font-size: block.kind == "heading" ? Theme.heading-size : Theme.text-size;
+                    default-color: Theme.text-primary; link-color: Theme.focus;
+                    link-clicked(url) => { root.open-link(url); }
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+        Rectangle { height: Theme.spacing-lg; }
+    }
+}

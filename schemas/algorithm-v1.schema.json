@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "category": {
+      "$ref": "#/$defs/Algorithm"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Entity"
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "version",
+    "id",
+    "name",
+    "category",
+    "entities",
+    "phases"
+  ],
+  "title": "AlgorithmIr",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Algorithm": {
+      "type": "string",
+      "enum": [
+        "array-traversal",
+        "two-sum",
+        "binary-search",
+        "bubble-sort",
+        "two-pointers",
+        "sliding-window",
+        "stack",
+        "queue",
+        "bfs",
+        "dfs",
+        "fibonacci"
+      ]
+    },
+    "Entity": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "role"
+      ]
+    }
+  }
+}

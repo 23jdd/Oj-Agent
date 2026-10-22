@@ -1,0 +1,9 @@
+{
+  "title": "Binary search",
+  "description": "Find target 11 in the sorted array using binary search.",
+  "algorithm": "binary-search",
+  "values": [1, 3, 5, 7, 9, 11, 13, 15],
+  "target": 11,
+  "source_code": "",
+  "language": "python"
+}

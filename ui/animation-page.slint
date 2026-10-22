@@ -1,0 +1,73 @@
+import { Theme } from "theme.slint";
+import { AppButton, SelectBox, SeekBar, Panel, SectionLabel, TextField } from "components.slint";
+
+export component AnimationPage inherits Rectangle {
+    in property <image> frame;
+    in property <int> frame-pixel-width;
+    in property <int> frame-pixel-height;
+    in property <float> preview-scale-factor: 1;
+    out property <length> preview-width: viewport.width;
+    out property <length> preview-height: viewport.height;
+    in property <string> title;
+    in property <string> basis;
+    in property <[string]> case-names;
+    in-out property <int> case-index;
+    in property <bool> busy;
+    in property <bool> playing;
+    in property <string> time-label;
+    in-out property <float> position;
+    in-out property <int> speed-index: 1;
+    in-out property <string> export-path;
+    callback back;
+    callback select-case(int);
+    callback play-pause;
+    callback step(bool);
+    callback restart;
+    callback seek(float);
+    callback change-speed(int);
+    callback export-gif;
+    callback export-json;
+    VerticalLayout {
+        spacing: Theme.spacing-md;
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            AppButton { text: "← 返回对话"; horizontal-stretch: 0; width: 128px; clicked => { root.back(); } }
+            Text { text: root.title; color: Theme.text-primary; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+            SelectBox { model: root.case-names; current-index <=> root.case-index; width: 220px; horizontal-stretch: 0; enabled: !root.busy; selected(value) => { root.select-case(self.current-index); } }
+        }
+        Text { text: root.basis; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+        Panel {
+            min-height: 160px; vertical-stretch: 1;
+            viewport := Rectangle {
+                x: ceil(Theme.border-width / 1px * root.preview-scale-factor) * 1px / root.preview-scale-factor;
+                y: self.x; width: parent.width - 2 * self.x; height: parent.height - 2 * self.y;
+                clip: true;
+                Image {
+                    property <length> native-width: root.frame-pixel-width * 1px / root.preview-scale-factor;
+                    property <length> native-height: root.frame-pixel-height * 1px / root.preview-scale-factor;
+                    property <float> fit: min(1, parent.width / max(1px, self.native-width), parent.height / max(1px, self.native-height));
+                    width: self.native-width * self.fit; height: self.native-height * self.fit;
+                    x: round((parent.width - self.width) / 1px * root.preview-scale-factor / 2) * 1px / root.preview-scale-factor;
+                    y: round((parent.height - self.height) / 1px * root.preview-scale-factor / 2) * 1px / root.preview-scale-factor;
+                    source: root.frame; image-fit: contain;
+                }
+            }
+        }
+        SeekBar { value <=> root.position; enabled: !root.busy; changed(value) => { root.seek(value); } }
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            AppButton { text: "重播"; clicked => { root.restart(); } }
+            AppButton { text: "上一步"; clicked => { root.step(false); } }
+            AppButton { text: root.playing ? "暂停" : "播放"; primary: true; clicked => { root.play-pause(); } }
+            AppButton { text: "下一步"; clicked => { root.step(true); } }
+            SelectBox { width: 80px; horizontal-stretch: 0; model: ["0.5×", "1×", "1.5×", "2×"]; current-index <=> root.speed-index; selected(value) => { root.change-speed(self.current-index); } }
+            SectionLabel { text: root.time-label; }
+        }
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            TextField { text <=> root.export-path; field-label: "导出位置"; }
+            AppButton { text: "导出 GIF"; width: 104px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.export-gif(); } }
+            AppButton { text: "保存动画"; width: 104px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.export-json(); } }
+        }
+    }
+}

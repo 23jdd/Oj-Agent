@@ -1,0 +1,55 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, TextField, SectionLabel, Divider } from "components.slint";
+
+export struct StyleField { key: string, label: string, value: string, group: int, is-color: bool, swatch: color }
+
+export component StyleEditor inherits Rectangle {
+    in property <[StyleField]> fields;
+    in property <string> error;
+    in property <string> config-path;
+    private property <int> tab: 0;
+    callback edited(int, string);
+    callback save;
+    callback reset;
+    callback cancel;
+    background: Theme.surface;
+    VerticalLayout {
+        padding: Theme.spacing-xl; spacing: Theme.spacing-md;
+        Text { text: "外观设置 / APPEARANCE"; color: Theme.text-primary; font-size: Theme.heading-size; font-weight: 700; }
+        SectionLabel { text: "保存后立即应用到界面、动画预览和导出。"; }
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            AppButton { text: "字体"; selected: root.tab == 0; clicked => { root.tab = 0; } }
+            AppButton { text: "颜色"; selected: root.tab == 1; clicked => { root.tab = 1; } }
+            AppButton { text: "尺寸"; selected: root.tab == 2; clicked => { root.tab = 2; } }
+        }
+        ScrollView {
+            vertical-stretch: 1;
+            VerticalLayout {
+                spacing: 0px;
+                for field[index] in root.fields: Rectangle {
+                    visible: field.group == root.tab;
+                    height: self.visible ? Theme.control-height + Theme.spacing-sm : 0px;
+                    HorizontalLayout {
+                        padding-bottom: parent.visible ? Theme.spacing-sm : 0px;
+                        spacing: Theme.spacing-md;
+                        SectionLabel { text: field.label; width: 196px; horizontal-stretch: 0; }
+                        if field.is-color: Rectangle { width: 24px; height: 24px; background: field.swatch; border-width: Theme.border-width; border-color: Theme.border; }
+                        TextField { text: field.value; field-label: field.label; edited(value) => { root.edited(index, value); } }
+                    }
+                }
+            }
+        }
+        if root.error != "": Text { text: root.error; color: Theme.danger; font-size: Theme.label-size; wrap: word-wrap; max-height: 64px; }
+        Divider {}
+        Text { text: "配置文件：" + root.config-path; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            AppButton { text: "恢复默认"; clicked => { root.reset(); } }
+            Rectangle { horizontal-stretch: 1; }
+            AppButton { text: "取消"; clicked => { root.cancel(); } }
+            AppButton { text: "保存并应用"; primary: true; clicked => { root.save(); } }
+        }
+    }
+}
