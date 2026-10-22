@@ -65,7 +65,7 @@ export component ModelEditor inherits VerticalLayout {
                 SelectBox { model: ["跟随模型默认", "关闭", "低", "高", "最高"]; current-index <=> root.reasoning-index; accessible-label: "思考强度"; }
             }
             Text { text: "思考强度与 Token 上限须在模型支持范围内。恢复输出上限不能小于普通上限；思考也可能占用输出 Token。"; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
-            AppCheckBox { text: "DeepSeek 无正文恢复时关闭思考"; checked <=> root.recovery-thinking-off; enabled: root.provider-index == 1; }
+
             Text { text: "配置保存在本机；API Key 不写入会话。\n配置文件：" + root.config-path; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
         }
     }

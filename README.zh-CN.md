@@ -3,8 +3,8 @@
 [English](README.md)
 
 Rust 原生桌面对话工作区，用于与 AI 讨论代码、检查算法，并通过动画观察执行过程。
-
-![OJ Agent 动画预览](preview.gif)
+## 预览
+![OJ Agent 动画预览](docs/preview.gif)
 
 ## 快速开始
 

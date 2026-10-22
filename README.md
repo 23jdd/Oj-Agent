@@ -3,8 +3,8 @@
 [中文](README.zh-CN.md)
 
 A native Rust desktop workspace for discussing code with AI, checking algorithms and exploring their execution as animations.
-
-![OJ Agent animation preview](preview.gif)
+## Preview
+![OJ Agent animation preview](docs/preview.gif)
 
 ## Quick start
 
