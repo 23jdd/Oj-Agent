@@ -1,41 +1,84 @@
 # OJ Agent
 
 [中文](README.zh-CN.md)
-## Preview
-![](preview.gif)
-OJ Agent is a Rust desktop chat workspace for discussing code and opening verified algorithm animations.
 
+A native Rust desktop workspace for discussing code with AI, checking algorithms and exploring their execution as animations.
 
-## Usage
+![OJ Agent animation preview](preview.gif)
 
-Requires Rust 1.97.1+ and platform C/C++ build tools.
+## Quick start
+
+Requires **Rust 1.97.1+** and your platform's C/C++ build tools.
 
 ```sh
-cargo run
+cargo run --locked
 ```
 
-Open **模型设置**, configure OpenAI, DeepSeek or a compatible endpoint, then chat. Use `@` to attach text/source files. AI decides whether an animation helps; click its message link to open the animation **inside the app**.
+1. Open **模型设置** (Model settings), choose OpenAI, DeepSeek or a compatible provider, and enter the model ID and API key. Compatible providers require an endpoint; leave it empty for a provider's default address.
+2. Save, then send a message with **发送** or **Ctrl+Enter**. Type `@` or click **@ 添加文件** to attach UTF-8 text/source files.
+3. AI can reply in Markdown, verify code or generate an animation when useful. Click an animation link to open playback **inside the app**, then choose **返回对话** to return.
+4. Switch conversations while replies run in the background. **停止** cancels only the selected conversation; **清除提示** dismisses its error banner without stopping work or deleting records.
+
+For a release build, run `cargo build --release --locked` and launch the executable in `target/release/`.
 
 ## Features
 
-- Persistent conversations with Markdown, code blocks, tables and attachment snapshots.
-- Concurrent AI replies across conversations, with independent drafts and cancellation.
-- Optional AI-triggered code verification and animation; no algorithm/sample forms.
-- Portable JavaScript VM with time, memory and stack limits; no host file/network/process APIs or Docker.
-- Normal, boundary and adversarial checks; separate animation timelines for each case.
-- Slint desktop UI, Skia playback, GIF/JSON export, and saved model and appearance settings.
-- Palette presets, font dropdowns, local font import and draft style previews.
-- Rig model providers, validated IR, SQLite artifacts, cancellation and bounded tool rounds.
+- Persistent conversations with Markdown, selectable code blocks, tables and attachment snapshots.
+- Concurrent AI replies with separate drafts, attachments, status and cancellation per conversation.
+- Per-conversation input, output and total Token usage, including tool, repair and recovery requests. Missing provider counters are labeled rather than estimated.
+- Optional code verification and application-local animation links; no algorithm selectors or sample forms.
+- Normal, boundary and adversarial cases with separate playback timelines, seeking, stepping, speed control and GIF/JSON export.
+- Frameless Slint UI with Skia rendering, palette presets, installed/local fonts and saved appearance settings.
+- Configurable timeouts, retries, output budgets, reasoning strength and agent rounds.
 
-The portable sandbox executes JavaScript. Checks of AI-translated Python/C++/Rust algorithms are clearly labeled; they do not execute or prove the original programs. Passing supplied tests is not exhaustive correctness verification.
+## Model and appearance settings
 
-## Documentation
+**模型设置** saves connection details and request behavior. Changes apply to subsequent turns; a running reply keeps its configuration. Invalid values cannot be saved, and Cancel discards the draft.
 
-[Chat and sandbox](docs/CHAT.md) · [Usage](docs/USAGE.md) · [Appearance](docs/STYLE.md) · [Renderer](docs/RENDERER.md) · [Architecture](ARCHITECTURE.md) · [IR](IR.md) · [Tools](TOOL.md) · [Sessions](SESSIONS.md) · [Errors](EXCEPTON.md) · [Design](DESIGN.md) · [License](LICENSE.md)
+| Request setting | Default |
+| --- | --- |
+| Timeout per request | 90 seconds |
+| Additional retries | 2; set 0 for a single attempt |
+| Initial retry delay | 500 ms, doubling up to 30 seconds |
+| Output / recovery output limit | 8192 / 16384 Token |
+| Recovery requests without a final answer | 1, within the shared retry allowance |
+| Agent rounds per message | 8 |
+| Reasoning | Provider default |
+| Disable thinking during DeepSeek recovery | On |
+
+Limits and reasoning options must be supported by the selected model. **恢复请求默认值** resets the request draft while keeping connection details. See [request configuration](docs/CHAT.md#request-settings--请求配置) for ranges and JSON fields.
+
+**外观** (Appearance) offers color presets, local TTF/OTF/TTC import, font sizes and geometry controls, with a draft preview before saving. See [appearance configuration](docs/STYLE.md).
+
+## Verification scope
+
+The chat tool executes JavaScript in a bounded QuickJS VM on Windows, Linux and macOS, without Docker or host filesystem, network and process APIs. Each case has time, memory and stack limits.
+
+AI-translated Python/C++/Rust algorithm checks are labeled as translations; they do not execute the original program. Passing the supplied cases does not prove correctness for every input. See [tools and verification](docs/CHAT.md#tools-and-verification).
+
+## Local data
+
+Conversations, attachment snapshots, usage, tool reports and animations are stored in SQLite. Messages and selected attachments are sent to the configured model provider.
+
+| Setting | Purpose |
+| --- | --- |
+| `OJ_DATA_DIR` | Profile directory containing `sessions.sqlite3`, `model.json` and `style.json` |
+| `OJ_MODEL_CONFIG` | Override the model settings file |
+| `OJ_STYLE_CONFIG` | Override the appearance settings file |
+
+The default profile uses the operating system's application data directory. Model settings contain the API key in plain text: keep `model.json` private. Clearing an error only dismisses its display; a later failure can show a new message.
+
+## Development
 
 ```sh
 cargo fmt --check
-cargo check
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
+cargo check --locked
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
+
+Run `cargo run --locked -- tool` to list CLI tools. See [usage and CLI examples](docs/USAGE.md).
+
+## Documentation
+
+[Chat and sandbox](docs/CHAT.md) · [Usage](docs/USAGE.md) · [Appearance](docs/STYLE.md) · [Renderer](docs/RENDERER.md) · [Architecture](ARCHITECTURE.md) · [IR](IR.md) · [Tools](TOOL.md) · [Sessions](SESSIONS.md) · [Errors](EXCEPTON.md) · [Design](DESIGN.md) · [License](LICENSE)

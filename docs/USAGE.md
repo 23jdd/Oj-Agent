@@ -6,6 +6,12 @@ Run `cargo run`, open **模型设置**, and configure a provider, model ID and A
 
 The frameless window supports header dragging, double-click maximize/restore, native edge resizing and upper-right window controls. **会话** toggles local history. **外观** edits fonts, colors and geometry; [appearance settings](STYLE.md) persist separately from messages. **模型设置** saves the provider, model, endpoint and API key to a user-private local file; keys never enter sessions.
 
+**清除提示** dismisses the selected conversation's error banner, including when
+returning to it after switching conversations. It does not stop requests, delete
+error records or clear errors in another conversation. New failures can show a
+new notice. Model and appearance validation notices have their own clear action;
+clearing them does not save or discard the edited values.
+
 Generation and verification run off the UI thread. A dedicated Skia worker paints preview frames directly into shared pixels. The image uses the viewport's physical resolution and redraws after 120 ms of stable resizing, including while paused. Playback, steps, seeking, speed and case selection share the prepared timeline with export. See [renderer](RENDERER.md).
 
 ## CLI
