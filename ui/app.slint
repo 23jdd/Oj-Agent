@@ -171,6 +171,7 @@ export component AppWindow inherits Window {
                     VerticalLayout {
                         padding: Theme.spacing-lg; spacing: Theme.spacing-md;
                         if root.messages.length == 0: VerticalLayout {
+                            vertical-stretch: 0;
                             spacing: Theme.spacing-lg;
                             Text { text: "从一个问题开始。"; font-size: Theme.heading-size; font-weight: 700; color: Theme.text-primary; }
                             Text { text: "讨论题目、检查代码，或让 AI 解释执行过程。输入 @ 添加文件。\n需要动画时，AI 会在消息中提供可打开的动画入口。"; font-size: Theme.text-size; color: Theme.text-secondary; wrap: word-wrap; }
