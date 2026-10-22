@@ -28,6 +28,25 @@
     "language": {
       "type": "string",
       "default": "python"
+    },
+    "stdin": {
+      "type": "string",
+      "default": ""
+    },
+    "execute_source": {
+      "type": "boolean",
+      "default": false
+    },
+    "graph": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GraphInput"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
@@ -54,6 +73,37 @@
         "bfs",
         "dfs",
         "fibonacci"
+      ]
+    },
+    "GraphInput": {
+      "type": "object",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "directed": {
+          "type": "boolean",
+          "default": false
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "required": [
+        "edges"
       ]
     }
   }

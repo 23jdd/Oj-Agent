@@ -1,4 +1,5 @@
 //! Portable, capability-free JavaScript verification. No host modules are registered.
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -24,15 +25,178 @@ pub struct Request {
     pub source: String,
     pub cases: Vec<Case>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+pub const MAX_STEPS: usize = 256;
+pub const MAX_VALUES: usize = 64;
+pub const MAX_NODES: usize = 128;
+pub const MAX_EDGES: usize = 256;
+pub const MAX_POINTERS: usize = 32;
+pub const MAX_CELLS: usize = 256;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Node {
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub value: Option<i64>,
+    #[serde(default)]
+    pub state: String,
+    #[serde(default)]
+    pub x: Option<f32>,
+    #[serde(default)]
+    pub y: Option<f32>,
+    #[serde(default)]
+    pub parent: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Edge {
+    pub from: String,
+    pub to: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub directed: bool,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Pointer {
+    pub name: String,
+    /// A node ID, a value index, or "row,col" for a grid cell.
+    pub target: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Cell {
+    pub row: usize,
+    pub col: usize,
+    #[serde(default)]
+    pub value: i64,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub state: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Step {
+    #[serde(default)]
     pub values: Vec<i64>,
     #[serde(default)]
     pub indices: Vec<usize>,
     pub explanation: String,
     #[serde(default)]
     pub state: String,
+    #[serde(default)]
+    pub nodes: Vec<Node>,
+    #[serde(default)]
+    pub edges: Vec<Edge>,
+    #[serde(default)]
+    pub pointers: Vec<Pointer>,
+    #[serde(default)]
+    pub cells: Vec<Cell>,
+}
+
+fn bounded_text(value: &str, limit: usize) -> bool {
+    value.chars().count() <= limit && !value.chars().any(char::is_control)
+}
+/// Validates one emitted step independently of rendering. The animation compiler
+/// repeats these checks because stored reports may predate a schema change.
+pub fn validate_step(step: &Step) -> Result<(), String> {
+    if step.values.len() > MAX_VALUES
+        || step.values.iter().any(|v| v.unsigned_abs() > 1_000_000_000)
+        || step.indices.iter().any(|i| *i >= step.values.len())
+        || step.explanation.len() > 2000
+        || step.state.len() > 2000
+    {
+        return Err("Trace contains invalid indices, too many values, or oversized text.".into());
+    }
+    if step.nodes.len() > MAX_NODES
+        || step.edges.len() > MAX_EDGES
+        || step.pointers.len() > MAX_POINTERS
+        || step.cells.len() > MAX_CELLS
+    {
+        return Err("Trace exceeds node, edge, pointer or cell limits.".into());
+    }
+    let mut node_ids = std::collections::BTreeSet::new();
+    for node in &step.nodes {
+        if !node_ids.insert(node.id.as_str())
+            || !bounded_text(&node.id, 128)
+            || !bounded_text(&node.label, 128)
+            || !bounded_text(&node.state, 32)
+            || node.value.is_some_and(|v| v.unsigned_abs() > 1_000_000_000)
+            || node
+                .x
+                .is_some_and(|v| !v.is_finite() || !(0. ..=1.).contains(&v))
+            || node
+                .y
+                .is_some_and(|v| !v.is_finite() || !(0. ..=1.).contains(&v))
+            || node
+                .parent
+                .as_deref()
+                .is_some_and(|parent| !bounded_text(parent, 128))
+        {
+            return Err(format!("Invalid node: {}", node.id));
+        }
+    }
+    for edge in &step.edges {
+        let endpoint = |target: &str| node_ids.contains(target) || cell_target_exists(step, target);
+        if !endpoint(edge.from.as_str())
+            || !endpoint(edge.to.as_str())
+            || !bounded_text(&edge.label, 64)
+        {
+            return Err(format!("Invalid edge: {} -> {}", edge.from, edge.to));
+        }
+    }
+    for node in &step.nodes {
+        if let Some(parent) = &node.parent
+            && !node_ids.contains(parent.as_str())
+        {
+            return Err(format!("Unknown parent for node: {}", node.id));
+        }
+    }
+    let mut cell_keys = std::collections::BTreeSet::new();
+    for cell in &step.cells {
+        if cell.row > 63
+            || cell.col > 63
+            || !cell_keys.insert((cell.row, cell.col))
+            || !bounded_text(&cell.label, 64)
+            || !bounded_text(&cell.state, 32)
+            || cell.value.unsigned_abs() > 1_000_000_000
+        {
+            return Err(format!("Invalid cell: {},{}", cell.row, cell.col));
+        }
+    }
+    let mut pointer_names = std::collections::BTreeSet::new();
+    for pointer in &step.pointers {
+        if !bounded_text(&pointer.name, 64)
+            || !pointer_names.insert(pointer.name.as_str())
+            || !pointer_target_exists(step, &pointer.target)
+        {
+            return Err(format!("Invalid pointer: {}", pointer.name));
+        }
+    }
+    Ok(())
+}
+fn cell_target_exists(step: &Step, target: &str) -> bool {
+    let Some((row, col)) = target.split_once(',') else {
+        return false;
+    };
+    let (Ok(row), Ok(col)) = (row.parse::<usize>(), col.parse::<usize>()) else {
+        return false;
+    };
+    step.cells
+        .iter()
+        .any(|cell| cell.row == row && cell.col == col)
+}
+fn pointer_target_exists(step: &Step, target: &str) -> bool {
+    if step.nodes.iter().any(|node| node.id == target) || cell_target_exists(step, target) {
+        return true;
+    }
+    target
+        .parse::<usize>()
+        .is_ok_and(|index| index < step.values.len() || index < step.cells.len())
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CaseResult {
@@ -159,16 +323,11 @@ fn execute(
     let result: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
     let steps: Vec<Step> = serde_json::from_value(result["steps"].clone())
         .map_err(|e| format!("Invalid trace step: {e}"))?;
-    if steps.len() > 256
-        || steps.iter().any(|s| {
-            s.values.len() > 64
-                || s.indices.iter().any(|i| *i >= s.values.len())
-                || s.explanation.len() > 2000
-                || s.state.len() > 2000
-                || s.values.iter().any(|v| v.unsigned_abs() > 1_000_000_000)
-        })
-    {
-        return Err("Trace contains invalid indices, too many values, or oversized text.".into());
+    if steps.len() > MAX_STEPS {
+        return Err("Trace exceeds 256 steps.".into());
+    }
+    for step in &steps {
+        validate_step(step)?;
     }
     Ok((result["result"].clone(), steps))
 }
@@ -197,6 +356,32 @@ mod tests {
                 .unwrap()
                 .passed
         );
+    }
+    #[test]
+    fn accepts_structured_nodes_edges_pointers_and_cells() {
+        let source = r#"function solve(a, emit) {
+            emit({nodes:[{id:"a",label:"A",value:1,state:"active"},{id:"b",label:"B",value:2}],
+                  edges:[{from:"a",to:"b",label:"next",directed:true}],
+                  pointers:[{name:"cur",target:"a"}],explanation:"linked"});
+            emit({cells:[{row:0,col:0,value:1},{row:1,col:1,value:2}],
+                  pointers:[{name:"dp",target:"1,1"}],explanation:"grid"});
+            return a[0]+a[1];
+        }"#;
+        let report = verify(&request(source), Arc::default()).unwrap();
+        assert!(report.passed);
+        assert_eq!(report.cases[0].steps.len(), 2);
+        assert_eq!(report.cases[0].steps[0].nodes.len(), 2);
+        assert_eq!(report.cases[0].steps[1].cells.len(), 2);
+    }
+    #[test]
+    fn rejects_dangling_structured_references() {
+        let source = r#"function solve(a, emit) {
+            emit({nodes:[{id:"a"}],edges:[{from:"a",to:"missing"}],explanation:"bad"});
+            return a[0]+a[1];
+        }"#;
+        let report = verify(&request(source), Arc::default()).unwrap();
+        assert!(!report.passed);
+        assert!(report.cases[0].error.is_some());
     }
     #[test]
     fn has_no_host_files_network_process_or_module_capabilities() {

@@ -88,6 +88,17 @@
         "state": {
           "type": "object",
           "additionalProperties": true
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceLocation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -117,6 +128,27 @@
         "visit",
         "branch",
         "return"
+      ]
+    },
+    "SourceLocation": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "function": {
+          "type": "string",
+          "default": ""
+        }
+      },
+      "required": [
+        "file",
+        "line"
       ]
     }
   }

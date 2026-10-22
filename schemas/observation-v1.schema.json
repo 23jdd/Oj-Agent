@@ -1,0 +1,190 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "values": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "int64"
+      },
+      "default": []
+    },
+    "indices": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint",
+        "minimum": 0
+      },
+      "default": []
+    },
+    "explanation": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "default": ""
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
+      "default": []
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Edge"
+      },
+      "default": []
+    },
+    "pointers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Pointer"
+      },
+      "default": []
+    },
+    "cells": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Cell"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "explanation"
+  ],
+  "title": "Step",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Node": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "value": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "default": null
+        },
+        "state": {
+          "type": "string",
+          "default": ""
+        },
+        "x": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float",
+          "default": null
+        },
+        "y": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float",
+          "default": null
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id"
+      ]
+    },
+    "Edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "directed": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "Pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string",
+          "description": "A node ID, a value index, or \"row,col\" for a grid cell."
+        }
+      },
+      "required": [
+        "name",
+        "target"
+      ]
+    },
+    "Cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "row": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "col": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "value": {
+          "type": "integer",
+          "format": "int64",
+          "default": 0
+        },
+        "label": {
+          "type": "string",
+          "default": ""
+        },
+        "state": {
+          "type": "string",
+          "default": ""
+        }
+      },
+      "required": [
+        "row",
+        "col"
+      ]
+    }
+  }
+}

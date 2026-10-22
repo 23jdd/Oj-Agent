@@ -162,6 +162,7 @@ fn main() -> anyhow::Result<()> {
                 ("trace", schema::<TraceIr>()),
                 ("visualization", schema::<VisualizationIr>()),
                 ("animation", schema::<AnimationIr>()),
+                ("observation", schema::<oj_sandbox::Step>()),
             ] {
                 std::fs::write(
                     output.join(format!("{name}-v1.schema.json")),

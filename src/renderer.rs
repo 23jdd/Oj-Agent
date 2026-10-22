@@ -310,7 +310,8 @@ impl PreparedScene {
             canvas.clip_rect(rect(bounds), None, true);
             match sample.object.kind.as_str() {
                 "text" => painter.draw_text_object(&sample)?,
-                "graph" | "tree" => painter.draw_graph(&sample)?,
+                "graph" | "tree" | "linked-list" => painter.draw_graph(&sample)?,
+                "grid" => painter.draw_grid(&sample)?,
                 _ => painter.draw_cells(&sample)?,
             }
             canvas.restore();
@@ -414,9 +415,28 @@ impl Painter<'_> {
             self.text_block(s.text, b, size, color, 1., false)
         }
     }
+    fn state_fill(&self, state: &str, highlight: f32) -> Color {
+        let base = match state {
+            "active" | "current" | "visiting" => self.style.colors.accent.skia(),
+            "done" | "visited" | "success" => self.style.colors.success.skia(),
+            "error" | "failed" => self.style.colors.danger.skia(),
+            _ => self.style.colors.background.skia(),
+        };
+        blend(base, self.style.colors.accent.skia(), highlight)
+    }
     fn draw_cell(&self, value: i64, b: Box2, highlight: f32, opacity: f32) -> Result<()> {
+        self.draw_cell_label(&value.to_string(), b, highlight, opacity, "normal")
+    }
+    fn draw_cell_label(
+        &self,
+        label: &str,
+        b: Box2,
+        highlight: f32,
+        opacity: f32,
+        state: &str,
+    ) -> Result<()> {
         let canvas = self.canvas;
-        if opacity <= 0.001 {
+        if opacity <= 0.001 || state == "hidden" {
             return Ok(());
         }
         canvas.draw_round_rect(
@@ -432,14 +452,7 @@ impl Painter<'_> {
             rect(b),
             self.style.geometry.radius,
             self.style.geometry.radius,
-            &paint(
-                blend(
-                    self.style.colors.background.skia(),
-                    self.style.colors.accent.skia(),
-                    highlight,
-                ),
-                opacity,
-            ),
+            &paint(self.state_fill(state, highlight), opacity),
         );
         let mut border = paint(self.style.colors.border.skia(), opacity);
         border.set_style(skia_safe::paint::Style::Stroke);
@@ -450,13 +463,121 @@ impl Painter<'_> {
             self.style.geometry.radius,
             &border,
         );
+        if state == "empty" && label.is_empty() {
+            return Ok(());
+        }
+        self.centered(label, b, (b.height * 0.55).clamp(9., 24.), true, opacity)
+    }
+    fn draw_pointer(
+        &self,
+        name: &str,
+        x: f32,
+        anchor_y: f32,
+        stack: usize,
+        opacity: f32,
+    ) -> Result<()> {
+        let label_y = anchor_y - 18. - stack as f32 * 16.;
+        let mut line = paint(self.style.colors.text_primary.skia(), opacity);
+        line.set_stroke_width(1.5);
+        self.canvas
+            .draw_line((x, label_y + 14.), (x, anchor_y), &line);
+        self.canvas
+            .draw_line((x - 4., anchor_y - 4.), (x, anchor_y), &line);
+        self.canvas
+            .draw_line((x + 4., anchor_y - 4.), (x, anchor_y), &line);
         self.centered(
-            &value.to_string(),
-            b,
-            (b.height * 0.55).clamp(9., 24.),
+            name,
+            Box2 {
+                x: x - 64.,
+                y: label_y,
+                width: 128.,
+                height: 14.,
+            },
+            13.,
             true,
             opacity,
         )
+    }
+    fn draw_pointers(
+        &self,
+        pointers: &[ScenePointer],
+        anchors: &[(f32, f32)],
+        opacity: f32,
+    ) -> Result<()> {
+        let mut stacks = std::collections::BTreeMap::<usize, usize>::new();
+        for pointer in pointers {
+            let Some((x, y)) = anchors.get(pointer.target) else {
+                continue;
+            };
+            let stack = stacks.entry(pointer.target).or_insert(0);
+            self.draw_pointer(&pointer.name, *x, *y, *stack, opacity)?;
+            *stack += 1;
+        }
+        Ok(())
+    }
+    fn draw_edge(
+        &self,
+        start: (f32, f32),
+        end: (f32, f32),
+        active: f32,
+        label: &str,
+        directed: bool,
+        opacity: f32,
+    ) -> Result<()> {
+        let mut edge = paint(
+            blend(
+                self.style.colors.text_secondary.skia(),
+                self.style.colors.text_primary.skia(),
+                active,
+            ),
+            (0.4 + 0.6 * active) * opacity,
+        );
+        edge.set_stroke_width(2. + active);
+        self.canvas.draw_line(start, end, &edge);
+        if directed {
+            let delta = (end.0 - start.0, end.1 - start.1);
+            let distance = delta.0.hypot(delta.1).max(1.);
+            let direction = (delta.0 / distance, delta.1 / distance);
+            for sign in [-1., 1.] {
+                self.canvas.draw_line(
+                    end,
+                    (
+                        end.0 - direction.0 * 8. + direction.1 * 4. * sign,
+                        end.1 - direction.1 * 8. - direction.0 * 4. * sign,
+                    ),
+                    &edge,
+                );
+            }
+        }
+        if !label.is_empty() {
+            self.centered(
+                label,
+                Box2 {
+                    x: (start.0 + end.0) / 2. - 56.,
+                    y: (start.1 + end.1) / 2. - 14.,
+                    width: 112.,
+                    height: 14.,
+                },
+                12.,
+                false,
+                opacity,
+            )?;
+        }
+        Ok(())
+    }
+    fn empty_marker(&self, object: &SceneObject) -> Result<()> {
+        let b = Box2::from(object);
+        let mut outline = paint(self.style.colors.text_secondary.skia(), 0.4);
+        outline.set_style(skia_safe::paint::Style::Stroke);
+        outline.set_stroke_width(2.);
+        let marker = Box2 {
+            x: b.x + b.width / 2. - 52.,
+            y: b.y + b.height / 2. - 24.,
+            width: 104.,
+            height: 48.,
+        };
+        self.canvas.draw_rect(rect(marker), &outline);
+        self.centered("EMPTY", marker, 14., false, 0.6)
     }
     fn draw_cells(&self, s: &ObjectSample<'_>) -> Result<()> {
         let canvas = self.canvas;
@@ -513,19 +634,10 @@ impl Painter<'_> {
                 canvas.draw_line((x + 4., to[i].y - 10.), (x, to[i].y - 6.), &arrow);
             }
         }
+        let anchors: Vec<(f32, f32)> = to.iter().map(|b| (b.center().0, b.y)).collect();
+        self.draw_pointers(&s.structure.pointers, &anchors, 1.)?;
         if s.values.is_empty() {
-            let b = Box2::from(s.object);
-            let mut outline = paint(self.style.colors.text_secondary.skia(), 0.4);
-            outline.set_style(skia_safe::paint::Style::Stroke);
-            outline.set_stroke_width(2.);
-            let marker = Box2 {
-                x: b.x + b.width / 2. - 52.,
-                y: b.y + b.height / 2. - 24.,
-                width: 104.,
-                height: 48.,
-            };
-            canvas.draw_rect(rect(marker), &outline);
-            self.centered("EMPTY", marker, 14., false, 0.6)?;
+            self.empty_marker(s.object)?;
         }
         Ok(())
     }
@@ -535,9 +647,68 @@ pub fn graph_layout(object: &SceneObject) -> Vec<(f32, f32)> {
     layout::graph_points(object, object.values.len())
 }
 impl Painter<'_> {
+    fn draw_grid(&self, s: &ObjectSample<'_>) -> Result<()> {
+        if s.values.is_empty() {
+            return self.empty_marker(s.object);
+        }
+        let cells = layout::grid_cells(s.object);
+        let trim = cells
+            .first()
+            .map(|cell| cell.width.min(cell.height) * 0.45)
+            .unwrap_or(8.);
+        for (i, [a, b]) in s.structure.edges.iter().enumerate() {
+            let (Some(from), Some(to)) = (cells.get(*a), cells.get(*b)) else {
+                continue;
+            };
+            let start = from.center();
+            let end = to.center();
+            let delta = (end.0 - start.0, end.1 - start.1);
+            let distance = delta.0.hypot(delta.1).max(1.);
+            let direction = (delta.0 / distance, delta.1 / distance);
+            let start = (start.0 + direction.0 * trim, start.1 + direction.1 * trim);
+            let end = (end.0 - direction.0 * trim, end.1 - direction.1 * trim);
+            let active = s.highlights[*a].min(s.highlights[*b]);
+            let label = s
+                .structure
+                .edge_labels
+                .get(i)
+                .map(String::as_str)
+                .unwrap_or("");
+            self.draw_edge(start, end, active, label, s.object.directed, 1.)?;
+        }
+        for (i, cell) in cells.iter().enumerate() {
+            let Some(value) = s.values.get(i) else {
+                continue;
+            };
+            let state = s
+                .structure
+                .states
+                .get(i)
+                .map(String::as_str)
+                .unwrap_or("normal");
+            let label = s
+                .structure
+                .labels
+                .get(i)
+                .filter(|label| !label.is_empty())
+                .cloned()
+                .unwrap_or_else(|| value.to_string());
+            self.draw_cell_label(&label, *cell, s.highlights[i], 1., state)?;
+        }
+        let anchors: Vec<(f32, f32)> = cells.iter().map(|cell| (cell.center().0, cell.y)).collect();
+        self.draw_pointers(&s.structure.pointers, &anchors, 1.)
+    }
     fn draw_graph(&self, s: &ObjectSample<'_>) -> Result<()> {
         let canvas = self.canvas;
-        let points = layout::graph_points(s.object, s.values.len());
+        if s.values.is_empty() {
+            return self.empty_marker(s.object);
+        }
+        let points = layout::graph_points_for(
+            s.object,
+            s.values.len(),
+            &s.structure.positions,
+            &s.structure.edges,
+        );
         let separation = points
             .iter()
             .enumerate()
@@ -549,7 +720,19 @@ impl Painter<'_> {
             })
             .fold(64., f32::min);
         let radius = (separation * 0.4).clamp(6., 25.);
-        for [a, b] in &s.object.edges {
+        let hidden: Vec<bool> = (0..s.values.len())
+            .map(|i| {
+                s.structure
+                    .states
+                    .get(i)
+                    .is_some_and(|state| state == "hidden")
+            })
+            .collect();
+        for (i, [a, b]) in s.structure.edges.iter().enumerate() {
+            if hidden.get(*a).copied().unwrap_or(false) || hidden.get(*b).copied().unwrap_or(false)
+            {
+                continue;
+            }
             let (Some(from), Some(to)) = (points.get(*a), points.get(*b)) else {
                 continue;
             };
@@ -559,32 +742,26 @@ impl Painter<'_> {
             let start = (from.0 + direction.0 * radius, from.1 + direction.1 * radius);
             let end = (to.0 - direction.0 * radius, to.1 - direction.1 * radius);
             let active = s.highlights[*a].min(s.highlights[*b]);
-            let mut edge = paint(
-                blend(
-                    self.style.colors.text_secondary.skia(),
-                    self.style.colors.text_primary.skia(),
-                    active,
-                ),
-                0.4 + 0.6 * active,
-            );
-            edge.set_stroke_width(2. + active);
-            canvas.draw_line(start, end, &edge);
-            if s.object.directed {
-                for sign in [-1., 1.] {
-                    canvas.draw_line(
-                        end,
-                        (
-                            end.0 - direction.0 * 8. + direction.1 * 4. * sign,
-                            end.1 - direction.1 * 8. - direction.0 * 4. * sign,
-                        ),
-                        &edge,
-                    );
-                }
-            }
+            let label = s
+                .structure
+                .edge_labels
+                .get(i)
+                .map(String::as_str)
+                .unwrap_or("");
+            self.draw_edge(start, end, active, label, s.object.directed, 1.)?;
         }
         for (i, value) in s.values.iter().enumerate() {
+            if hidden.get(i).copied().unwrap_or(false) {
+                continue;
+            }
             let point = points[i];
             let highlight = s.highlights[i];
+            let state = s
+                .structure
+                .states
+                .get(i)
+                .map(String::as_str)
+                .unwrap_or("normal");
             canvas.draw_circle(
                 (
                     point.0 + self.style.geometry.shadow_offset,
@@ -593,18 +770,7 @@ impl Painter<'_> {
                 radius,
                 &paint(self.style.colors.border.skia(), 1.),
             );
-            canvas.draw_circle(
-                point,
-                radius,
-                &paint(
-                    blend(
-                        self.style.colors.background.skia(),
-                        self.style.colors.accent.skia(),
-                        highlight,
-                    ),
-                    1.,
-                ),
-            );
+            canvas.draw_circle(point, radius, &paint(self.state_fill(state, highlight), 1.));
             let mut border = paint(self.style.colors.border.skia(), 1.);
             border.set_style(skia_safe::paint::Style::Stroke);
             border.set_stroke_width(self.style.geometry.border_width);
@@ -615,13 +781,14 @@ impl Painter<'_> {
                 width: 2. * radius,
                 height: 2. * radius,
             };
-            self.centered(
-                &value.to_string(),
-                node,
-                (radius * 0.8).clamp(8., 20.),
-                true,
-                1.,
-            )?;
+            let label = s
+                .structure
+                .labels
+                .get(i)
+                .filter(|label| !label.is_empty())
+                .cloned()
+                .unwrap_or_else(|| value.to_string());
+            self.centered(&label, node, (radius * 0.8).clamp(8., 20.), true, 1.)?;
             self.centered(
                 &i.to_string(),
                 Box2 {
@@ -634,6 +801,10 @@ impl Painter<'_> {
                 0.7,
             )?;
         }
-        Ok(())
+        let anchors: Vec<(f32, f32)> = points
+            .iter()
+            .map(|point| (point.0, point.1 - radius - 6.))
+            .collect();
+        self.draw_pointers(&s.structure.pointers, &anchors, 1.)
     }
 }

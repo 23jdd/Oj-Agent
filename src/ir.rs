@@ -6,6 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const MAX_EVENTS: usize = 10_000;
 pub const MAX_VALUES: usize = 64;
+pub const MAX_OBJECT_VALUES: usize = 128;
+pub const MAX_EDGES: usize = 256;
+pub const MAX_POINTERS: usize = 32;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -273,6 +276,29 @@ pub struct Scene {
     pub height: u32,
     pub objects: Vec<SceneObject>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct ScenePointer {
+    pub name: String,
+    pub target: usize,
+}
+/// Structural state that can change independently of numeric cell values.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+pub struct SceneStructure {
+    #[serde(default)]
+    pub edges: Vec<[usize; 2]>,
+    #[serde(default)]
+    pub edge_labels: Vec<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub states: Vec<String>,
+    #[serde(default)]
+    pub positions: Vec<[f32; 2]>,
+    #[serde(default)]
+    pub pointers: Vec<ScenePointer>,
+    #[serde(default)]
+    pub parents: Vec<Option<usize>>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SceneObject {
     pub id: String,
@@ -289,6 +315,35 @@ pub struct SceneObject {
     pub edges: Vec<[usize; 2]>,
     #[serde(default)]
     pub directed: bool,
+    #[serde(default)]
+    pub edge_labels: Vec<String>,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub states: Vec<String>,
+    #[serde(default)]
+    pub positions: Vec<[f32; 2]>,
+    #[serde(default)]
+    pub pointers: Vec<ScenePointer>,
+    #[serde(default)]
+    pub parents: Vec<Option<usize>>,
+    #[serde(default)]
+    pub rows: u32,
+    #[serde(default)]
+    pub cols: u32,
+}
+impl SceneObject {
+    pub fn structure(&self) -> SceneStructure {
+        SceneStructure {
+            edges: self.edges.clone(),
+            edge_labels: self.edge_labels.clone(),
+            labels: self.labels.clone(),
+            states: self.states.clone(),
+            positions: self.positions.clone(),
+            pointers: self.pointers.clone(),
+            parents: self.parents.clone(),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -309,6 +364,8 @@ pub struct AnimationAction {
     pub indices: Vec<usize>,
     pub text: String,
     pub values: Vec<i64>,
+    #[serde(default)]
+    pub structure: Option<SceneStructure>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AnimationIr {
@@ -342,6 +399,65 @@ pub fn unique_ids<'a>(ids: impl Iterator<Item = &'a str>, stage: &str) -> Result
             return Err(AppError::validation(
                 stage,
                 format!("Empty or duplicate ID: {id}"),
+            ));
+        }
+    }
+    Ok(())
+}
+fn valid_label(value: &str, limit: usize) -> bool {
+    value.chars().count() <= limit && !value.chars().any(char::is_control)
+}
+fn validate_structure(structure: &SceneStructure, count: usize) -> Result<()> {
+    if structure.edges.len() > MAX_EDGES
+        || structure.pointers.len() > MAX_POINTERS
+        || structure
+            .edges
+            .iter()
+            .flatten()
+            .any(|index| *index >= count)
+        || (!structure.edge_labels.is_empty()
+            && structure.edge_labels.len() != structure.edges.len())
+        || structure
+            .edge_labels
+            .iter()
+            .any(|label| !valid_label(label, 64))
+        || structure.labels.len() > count
+        || structure.states.len() > count
+        || structure
+            .labels
+            .iter()
+            .any(|label| !valid_label(label, 128))
+        || structure.states.iter().any(|state| !valid_label(state, 32))
+        || (!structure.positions.is_empty() && structure.positions.len() != count)
+        || structure
+            .positions
+            .iter()
+            .flatten()
+            .any(|value| !value.is_finite() || !(0. ..=1.).contains(value))
+        || (!structure.parents.is_empty() && structure.parents.len() != count)
+        || structure
+            .parents
+            .iter()
+            .flatten()
+            .any(|parent| *parent >= count)
+    {
+        return Err(AppError::validation(
+            "AnimationValidation",
+            "Invalid scene structure limits or references.",
+        ));
+    }
+    unique_ids(
+        structure
+            .pointers
+            .iter()
+            .map(|pointer| pointer.name.as_str()),
+        "AnimationValidation",
+    )?;
+    for pointer in &structure.pointers {
+        if pointer.target >= count {
+            return Err(AppError::validation(
+                "AnimationValidation",
+                format!("Pointer target is outside the object: {}", pointer.name),
             ));
         }
     }
@@ -479,22 +595,36 @@ impl AnimationIr {
             "AnimationValidation",
         )?;
         for o in &self.scene.objects {
-            if !["array", "text", "graph", "tree", "table", "stack", "queue"]
-                .contains(&o.kind.as_str())
+            let grid = o.kind == "grid";
+            if ![
+                "array",
+                "text",
+                "graph",
+                "tree",
+                "table",
+                "stack",
+                "queue",
+                "linked-list",
+                "grid",
+            ]
+            .contains(&o.kind.as_str())
                 || ![o.x, o.y, o.width, o.height]
                     .iter()
                     .all(|v| v.is_finite() && *v >= 0.)
                 || o.x + o.width > self.scene.width as f32
                 || o.y + o.height > self.scene.height as f32
-                || o.values.len() > MAX_VALUES
-                || o.edges.len() > 512
-                || o.edges.iter().flatten().any(|i| *i >= o.values.len())
+                || o.values.len() > MAX_OBJECT_VALUES
+                || (grid
+                    && (o.rows > 64
+                        || o.cols > 64
+                        || u64::from(o.rows) * u64::from(o.cols) != o.values.len() as u64))
             {
                 return Err(AppError::validation(
                     "AnimationValidation",
-                    "Invalid object geometry, type or values.",
+                    "Invalid object geometry, type, grid dimensions or values.",
                 ));
             }
+            validate_structure(&o.structure(), o.values.len())?;
         }
         let mut last = 0.;
         let mut lengths: BTreeMap<&str, usize> = self
@@ -520,17 +650,21 @@ impl AnimationIr {
                 || a.at < last
                 || a.duration < 0.
                 || a.at + a.duration > self.duration + 0.000001
-                || a.values.len() > MAX_VALUES
+                || a.values.len() > MAX_OBJECT_VALUES
                 || (a.action == Action::Highlight
                     && (object.kind == "text"
                         || a.indices.iter().any(|i| *i >= lengths[a.target.as_str()])))
                 || (a.action == Action::UpdateValue && object.kind == "text")
                 || (a.action == Action::UpdateText && object.kind != "text")
+                || (a.action != Action::UpdateValue && a.structure.is_some())
             {
                 return Err(AppError::validation(
                     "AnimationValidation",
                     "Invalid timeline order, duration or array index.",
                 ));
+            }
+            if let Some(structure) = &a.structure {
+                validate_structure(structure, a.values.len())?;
             }
             if a.action == Action::UpdateValue {
                 lengths.insert(a.target.as_str(), a.values.len());

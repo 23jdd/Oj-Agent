@@ -2784,3 +2784,34 @@ Rendering
 without guessing.
 
 That separation is the primary purpose of the IR architecture.
+
+---
+
+# Structured animation extension (version 2, backward compatible)
+
+The chat animation compiler can now emit non-array visual structures without
+creating a second animation system. Existing `values`, `indices`, `edges`,
+`directed`, `text` and action fields remain valid; all new fields are optional
+and default to empty.
+
+`SceneObject` and `AnimationAction` may carry:
+
+- `labels`, `states`: per-node or per-cell display labels and semantic states
+  (`normal`, `active`/`current`/`visiting`, `done`/`visited`/`success`,
+  `error`, `hidden`, `empty`).
+- `positions`: normalized `[x, y]` coordinates in `0..1` for graph nodes.
+- `edges`, `edge_labels`, `directed`: node or grid-cell connections; indices
+  refer to the object's values in row-major grid order.
+- `pointers`: a pointer name and target index. For arrays the target is a value
+  index; for trees/graphs/linked lists it is a node index; for grids it is a
+  row-major cell index.
+- `parents`: optional explicit parent indices for tree consumers.
+- `rows`, `cols`: required for `grid` objects, with
+  `rows * cols == values.len()`.
+
+`AnimationAction::UpdateValue` carries a full `structure` snapshot when
+connectivity, labels, states, positions or pointers change. The timeline
+compiles structure keyframes alongside value keyframes, so seeking remains
+deterministic. `tree`, `graph`, `linked-list` and `grid` object kinds are
+rendered by the existing Skia renderer; values-only objects still use the
+array/table/stack/queue layouts.

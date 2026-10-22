@@ -38,9 +38,11 @@ pub struct ValueFrame {
 
 pub struct ObjectTrack {
     pub object: SceneObject,
+    initial_structure: SceneStructure,
     values: Vec<ValueFrame>,
+    structure: Vec<Keyframe<SceneStructure>>,
     text: Vec<Keyframe<String>>,
-    highlights: Vec<Keyframe<[f32; MAX_VALUES]>>,
+    highlights: Vec<Keyframe<[f32; MAX_OBJECT_VALUES]>>,
     visibility: Vec<Keyframe<f32>>,
 }
 
@@ -50,30 +52,39 @@ pub struct ObjectSample<'a> {
     pub values: &'a [i64],
     pub origins: Option<&'a [Option<usize>]>,
     pub value_progress: f32,
+    pub previous_structure: &'a SceneStructure,
+    pub structure: &'a SceneStructure,
+    pub structure_progress: f32,
     pub previous_text: &'a str,
     pub text: &'a str,
     pub text_progress: f32,
-    pub highlights: [f32; MAX_VALUES],
+    pub highlights: [f32; MAX_OBJECT_VALUES],
     pub opacity: f32,
 }
 
 impl ObjectTrack {
-    fn highlights_at(&self, time: f64) -> [f32; MAX_VALUES] {
+    fn highlights_at(&self, time: f64) -> [f32; MAX_OBJECT_VALUES] {
         current(&self.highlights, time)
             .map(|key| {
                 let p = key.progress(time);
                 std::array::from_fn(|i| lerp(key.from[i], key.to[i], p))
             })
-            .unwrap_or([0.; MAX_VALUES])
+            .unwrap_or([0.; MAX_OBJECT_VALUES])
     }
     fn opacity_at(&self, time: f64) -> f32 {
         current(&self.visibility, time)
             .map(|key| lerp(key.from, key.to, key.progress(time)))
             .unwrap_or(1.)
     }
+    fn structure_at(&self, time: f64) -> SceneStructure {
+        current(&self.structure, time)
+            .map(|key| key.to.clone())
+            .unwrap_or_else(|| self.initial_structure.clone())
+    }
     pub fn sample(&self, time: f64) -> ObjectSample<'_> {
         let value_index = self.values.partition_point(|key| key.at <= time);
         let values = value_index.checked_sub(1).map(|i| &self.values[i]);
+        let structure = current(&self.structure, time);
         let text = current(&self.text, time);
         ObjectSample {
             object: &self.object,
@@ -87,6 +98,13 @@ impl ObjectTrack {
             value_progress: values
                 .map(|key| progress(time, key.at, key.duration))
                 .unwrap_or(1.),
+            previous_structure: structure
+                .map(|key| &key.from)
+                .unwrap_or(&self.initial_structure),
+            structure: structure
+                .map(|key| &key.to)
+                .unwrap_or(&self.initial_structure),
+            structure_progress: structure.map(|key| key.progress(time)).unwrap_or(1.),
             previous_text: text
                 .map(|key| key.from.as_str())
                 .unwrap_or(&self.object.text),
@@ -116,12 +134,17 @@ impl Timeline {
             .objects
             .iter()
             .cloned()
-            .map(|object| ObjectTrack {
-                object,
-                values: vec![],
-                text: vec![],
-                highlights: vec![],
-                visibility: vec![],
+            .map(|object| {
+                let initial_structure = object.structure();
+                ObjectTrack {
+                    object,
+                    initial_structure,
+                    values: vec![],
+                    structure: vec![],
+                    text: vec![],
+                    highlights: vec![],
+                    visibility: vec![],
+                }
             })
             .collect();
         let indices: BTreeMap<_, _> = objects
@@ -158,6 +181,15 @@ impl Timeline {
                         to: action.values.clone(),
                         origins,
                     });
+                    if let Some(structure) = &action.structure {
+                        let from = track.structure_at(action.at);
+                        track.structure.push(Keyframe {
+                            at: action.at,
+                            duration: action.duration,
+                            from,
+                            to: structure.clone(),
+                        });
+                    }
                 }
                 Action::UpdateText => {
                     let from = track
@@ -174,7 +206,7 @@ impl Timeline {
                     });
                 }
                 Action::Highlight => {
-                    let mut to = [0.; MAX_VALUES];
+                    let mut to = [0.; MAX_OBJECT_VALUES];
                     for index in &action.indices {
                         to[*index] = 1.;
                     }

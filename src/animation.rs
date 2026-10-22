@@ -32,6 +32,14 @@ pub fn compile(
         state: "normal".into(),
         edges: vec![],
         directed: false,
+        edge_labels: vec![],
+        labels: vec![],
+        states: vec![],
+        positions: vec![],
+        pointers: vec![],
+        parents: vec![],
+        rows: 0,
+        cols: 0,
     }];
     let kind = visual
         .objects
@@ -51,6 +59,14 @@ pub fn compile(
         state: "normal".into(),
         edges: vec![],
         directed: false,
+        edge_labels: vec![],
+        labels: vec![],
+        states: vec![],
+        positions: vec![],
+        pointers: vec![],
+        parents: vec![],
+        rows: 0,
+        cols: 0,
     });
     for obj in &visual.objects {
         let (y, height) = match obj.id.as_str() {
@@ -87,6 +103,14 @@ pub fn compile(
                 .get("graph")
                 .and_then(|g| g["directed"].as_bool())
                 .unwrap_or(false),
+            edge_labels: vec![],
+            labels: vec![],
+            states: vec![],
+            positions: vec![],
+            pointers: vec![],
+            parents: vec![],
+            rows: 0,
+            cols: 0,
         });
     }
     if !objects.iter().any(|o| o.id == "values_view")
@@ -172,6 +196,7 @@ pub fn compile(
                 indices,
                 text,
                 values,
+                structure: None,
             });
         }
     }

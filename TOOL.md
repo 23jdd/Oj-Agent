@@ -9,6 +9,15 @@ may be used without animation, and ordinary replies need no tools. Animation
 links open inside the native application. See [implemented protocol and limits](docs/CHAT.md).
 The native execution and IR tools below remain separate facilities.
 
+Structured execution observations may include stable node IDs, labels, node
+values, semantic states, explicit parent/child or graph edges, edge labels,
+pointers and row/column cells. `animation.create` accepts the layouts `array`,
+`table`, `stack`, `queue`, `tree`, `graph`, `linked-list` and `grid`; the layout
+must match the emitted structure. Values-only traces remain valid. Node, edge,
+pointer, cell and text limits are enforced by the sandbox and the animation
+compiler; dangling references and mismatched layouts return actionable tool
+errors.
+
 # Tool Specification
 
 ## 1. Purpose

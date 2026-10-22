@@ -108,6 +108,89 @@
         },
         "state": {
           "type": "string"
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "default": []
+        },
+        "directed": {
+          "type": "boolean",
+          "default": false
+        },
+        "edge_labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "default": []
+        },
+        "pointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScenePointer"
+          },
+          "default": []
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "default": []
+        },
+        "rows": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "cols": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
         }
       },
       "required": [
@@ -120,6 +203,23 @@
         "text",
         "values",
         "state"
+      ]
+    },
+    "ScenePointer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "target": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "name",
+        "target"
       ]
     },
     "AnimationAction": {
@@ -156,6 +256,17 @@
             "type": "integer",
             "format": "int64"
           }
+        },
+        "structure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SceneStructure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -178,6 +289,79 @@
         "hide",
         "wait"
       ]
+    },
+    "SceneStructure": {
+      "type": "object",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "default": []
+        },
+        "edge_labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "float"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "default": []
+        },
+        "pointers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScenePointer"
+          },
+          "default": []
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "default": []
+        }
+      },
+      "description": "Structural state that can change independently of numeric cell values."
     }
   }
 }

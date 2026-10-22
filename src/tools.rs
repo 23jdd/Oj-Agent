@@ -189,6 +189,7 @@ pub fn definitions() -> Vec<ToolDefinition> {
         ("animation.compile","Compile deterministic animation",false,json!({"type":"object","required":["algorithm","trace","visualization"]})),
         ("animation.validate","Validate an animation",false,schema::<AnimationIr>()),
         ("sandbox.verify","Run JavaScript in a bounded capability-free VM and compare JSON test results",false,json!({"type":"object","required":["source","cases"],"additionalProperties":false,"properties":{"source":{"type":"string","maxLength":100000},"cases":{"type":"array","minItems":1,"maxItems":16,"items":{"type":"object","required":["name","category","input","expected"],"properties":{"name":{"type":"string"},"category":{"enum":["normal","boundary","adversarial"]},"input":{},"expected":{}}}}}})),
+        ("animation.create","Compile verified execution observations into an application-local animation",false,json!({"type":"object","required":["verification_id","title","layout"],"additionalProperties":false,"properties":{"verification_id":{"type":"string"},"title":{"type":"string","maxLength":160},"layout":{"enum":["array","table","stack","queue","tree","graph","linked-list","grid"]}}})),
     ].into_iter().map(|(name,description,side_effects,input_schema)|ToolDefinition{name,description,side_effects,input_schema,output_schema:json!({"type":"object","required":["ok"],"properties":{"ok":{"type":"boolean"},"data":{},"error":{"type":"object"},"warnings":{"type":"array"}}})}).collect()
 }
 pub fn invoke(name: &str, input: &Value) -> Value {

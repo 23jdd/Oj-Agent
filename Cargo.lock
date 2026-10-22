@@ -3696,6 +3696,7 @@ name = "oj-sandbox"
 version = "0.1.0"
 dependencies = [
  "rquickjs",
+ "schemars",
  "serde",
  "serde_json",
 ]

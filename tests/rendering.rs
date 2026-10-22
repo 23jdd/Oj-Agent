@@ -108,6 +108,7 @@ fn interrupted_highlights_are_continuous_and_zero_duration_is_immediate() {
             indices: vec![0],
             text: String::new(),
             values: vec![],
+            structure: None,
         },
         AnimationAction {
             at: 0.5,
@@ -117,6 +118,7 @@ fn interrupted_highlights_are_continuous_and_zero_duration_is_immediate() {
             indices: vec![1],
             text: String::new(),
             values: vec![],
+            structure: None,
         },
         AnimationAction {
             at: 1.5,
@@ -126,6 +128,7 @@ fn interrupted_highlights_are_continuous_and_zero_duration_is_immediate() {
             indices: vec![],
             text: String::new(),
             values: vec![],
+            structure: None,
         },
     ];
     let timeline = Timeline::new(&ir).unwrap();
