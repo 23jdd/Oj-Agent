@@ -120,9 +120,16 @@ export component AppWindow inherits Window {
                     AppButton { text: "+ 新对话"; primary: true; enabled: !root.busy; clicked => { root.new-session(); } }
                     Divider {}
                     ScrollView {
+                        content-width: self.visible-width;
                         VerticalLayout {
                             spacing: Theme.spacing-sm;
-                            for item in root.sessions: AppButton { text: item.title; selected: item.id == root.selected-session; enabled: !root.busy; clicked => { root.select-session(item.id); } }
+                            for item in root.sessions: AppButton {
+                                text: item.title;
+                                text-align: start;
+                                selected: item.id == root.selected-session;
+                                enabled: !root.busy;
+                                clicked => { root.select-session(item.id); }
+                            }
                         }
                     }
                     AppButton { text: "删除对话"; enabled: root.selected-session != "" && !root.busy; clicked => { root.delete-session(); } }

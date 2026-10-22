@@ -85,13 +85,16 @@ fn show_error(ui: &AppWindow, error: AppError) {
         .into(),
     );
 }
+fn session_label(title: &str) -> String {
+    title.split_whitespace().collect::<Vec<_>>().join(" ")
+}
 fn refresh_sessions(ui: &AppWindow, path: &Path) -> Result<()> {
     let items = SqliteStore::open(path)?
         .list()?
         .into_iter()
         .map(|s| SessionItem {
             id: s.id.into(),
-            title: s.title.into(),
+            title: session_label(&s.title).into(),
             status: s.status.into(),
         })
         .collect::<Vec<_>>();
@@ -343,7 +346,7 @@ pub fn run() -> anyhow::Result<()> {
                 return;
             }
             let result = (|| {
-                let title = text.chars().take(32).collect::<String>();
+                let title = session_label(&text).chars().take(32).collect::<String>();
                 let message = chat::Message::new(
                     "user",
                     if text.is_empty() {
@@ -807,4 +810,19 @@ pub fn run() -> anyhow::Result<()> {
     ui.run()?;
     state.borrow().cancel.store(true, Ordering::Relaxed);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::session_label;
+
+    #[test]
+    fn session_labels_stay_on_one_line() {
+        assert_eq!(
+            session_label("第一行标题\n第二行标题"),
+            "第一行标题 第二行标题"
+        );
+        assert_eq!(session_label("  spaced\t title  "), "spaced title");
+        assert_eq!(session_label("\n"), "");
+    }
 }

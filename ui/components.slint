@@ -9,6 +9,7 @@ export component AppButton inherits Rectangle {
     in property <image> icon;
     in property <bool> icon-only: false;
     in property <bool> destructive: false;
+    in property <TextHorizontalAlignment> text-align: center;
     callback clicked;
     forward-focus: focus;
     height: Theme.control-height;
@@ -28,11 +29,14 @@ export component AppButton inherits Rectangle {
         background: !root.enabled ? Theme.disabled : root.destructive && (touch.has-hover || touch.pressed) ? Theme.danger : touch.pressed ? Theme.surface-active : root.primary || root.selected ? Theme.accent : touch.has-hover ? Theme.surface-hover : Theme.surface;
         Text {
             visible: !root.icon-only;
+            x: Theme.spacing-sm;
+            width: parent.width - 2 * Theme.spacing-sm;
+            height: parent.height;
             text: (root.selected ? "•  " : "") + root.text;
             color: !root.enabled ? Theme.text-disabled : Theme.text-primary;
             font-size: Theme.text-size;
             font-weight: root.primary || root.selected ? 700 : 500;
-            horizontal-alignment: center; vertical-alignment: center; overflow: elide;
+            horizontal-alignment: root.text-align; vertical-alignment: center; overflow: elide;
         }
         if root.icon-only: Image {
             x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
