@@ -192,6 +192,34 @@ async fn ai_tools_verify_cases_publish_local_animation_and_restore_it() {
         3
     );
 }
+
+#[tokio::test]
+async fn fabricated_animation_links_are_repaired_before_display() {
+    let mut store = SqliteStore::memory().unwrap();
+    let session = store.create_chat("links").unwrap();
+    store
+        .append_message(&session, &Message::new("user", "解释一下".into(), vec![]))
+        .unwrap();
+    let (config, server) = mock(2, |index, request| {
+        if index == 0 {
+            json!({"markdown":"[假的动画](oj-animation:00000000-0000-0000-0000-000000000000)","tool_calls":[],"done":true})
+        } else {
+            assert!(
+                prompt(request)["tool_results"][0]["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("unregistered")
+            );
+            json!({"markdown":"这次只提供文字解释。","tool_calls":[],"done":true})
+        }
+    });
+    let result = chat::respond(&mut store, &session, &config, Arc::default(), |_| {})
+        .await
+        .unwrap();
+    assert!(!result.markdown.contains("oj-animation:"));
+    assert_eq!(store.messages(&session).unwrap().len(), 2);
+    server.join().unwrap();
+}
 #[test]
 fn failed_or_insufficient_checks_cannot_be_published_and_attachments_are_bounded() {
     let request: oj_sandbox::Request = serde_json::from_value(request()).unwrap();
