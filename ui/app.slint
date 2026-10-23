@@ -15,7 +15,7 @@ export component AppWindow inherits Window {
     title: "OJ Agent · 算法演绎";
     icon: @image-url("icons/app-icon.png");
     no-frame: true;
-    resize-border-width: root.maximized ? 0px : Theme.spacing-sm;
+    resize-border-width: root.maximized || root.animation-expanded ? 0px : Theme.spacing-sm;
     preferred-width: 1320px; preferred-height: 860px;
     min-width: 960px; min-height: 640px;
     background: Theme.background;
@@ -54,6 +54,7 @@ export component AppWindow inherits Window {
     private property <bool> history-open: true;
     private property <bool> source-open: false;
     private property <bool> modal-open: root.style-open || root.settings-open;
+    changed modal-open => { if !root.modal-open { shortcuts.focus(); } }
     in property <bool> busy: false;
     in property <bool> file-pending: false;
     in property <bool> playing: false;
@@ -63,6 +64,18 @@ export component AppWindow inherits Window {
     in property <[ChatMessage]> messages;
     in property <[AttachmentItem]> attachments;
     in-out property <bool> animation-open: false;
+    in-out property <bool> animation-fullscreen <=> root.full-screen;
+    private property <bool> animation-expanded: root.animation-open && root.animation-fullscreen;
+    changed animation-open => {
+        if !root.animation-open { root.animation-fullscreen = false; }
+        shortcuts.focus();
+    }
+    public function toggle-animation-fullscreen() {
+        if root.animation-open && !root.modal-open {
+            root.animation-fullscreen = !root.animation-fullscreen;
+            shortcuts.focus();
+        }
+    }
     in property <string> animation-title;
     in property <string> animation-basis;
     in property <[string]> case-names;
@@ -108,9 +121,23 @@ export component AppWindow inherits Window {
     callback export-gif;
     callback export-json;
 
+    forward-focus: shortcuts;
+    shortcuts := FocusScope {
+        width: parent.width; height: parent.height;
+        capture-key-pressed(event) => {
+            if event.text == Key.F11 && root.animation-open && !root.modal-open {
+                if !event.repeat { root.toggle-animation-fullscreen(); }
+                return accept;
+            }
+            if event.text == Key.Escape && root.animation-expanded {
+                root.animation-fullscreen = false;
+                return accept;
+            }
+            return reject;
+        }
     VerticalLayout {
-        padding: Theme.spacing-lg; spacing: Theme.spacing-md;
-        HorizontalLayout {
+        padding: root.animation-expanded ? Theme.spacing-sm : Theme.spacing-lg; spacing: Theme.spacing-md;
+        if !root.animation-expanded: HorizontalLayout {
             height: Theme.titlebar-height; spacing: Theme.spacing-lg;
             WindowMoveArea {
                 visible: !root.modal-open;
@@ -143,7 +170,7 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             visible: !root.modal-open;
             spacing: Theme.spacing-md; vertical-stretch: 1;
-            if root.history-open: Panel {
+            if root.history-open && !root.animation-expanded: Panel {
                 width: Theme.sidebar-width;
                 min-height: 0px;
                 VerticalLayout {
@@ -232,8 +259,10 @@ export component AppWindow inherits Window {
                     title: root.animation-title; basis: root.animation-basis;
                     case-names: root.case-names; case-index <=> root.case-index;
                     busy: root.busy; playing: root.playing; time-label: root.time-label;
+                    full-screen: root.animation-expanded;
                     position <=> root.position; speed-index <=> root.speed-index; export-path <=> root.export-path;
-                    back => { root.back-to-chat(); }
+                    back => { root.animation-fullscreen = false; root.back-to-chat(); }
+                    toggle-fullscreen => { root.toggle-animation-fullscreen(); }
                     select-case(index) => { root.select-case(index); }
                     play-pause => { root.play-pause(); } step(forward) => { root.step(forward); }
                     restart => { root.restart(); } seek(value) => { root.seek(value); }
@@ -246,11 +275,11 @@ export component AppWindow inherits Window {
             message: root.error-text;
             dismissed => { root.clear-error(); }
         }
-        HorizontalLayout {
+        if !root.animation-expanded: HorizontalLayout {
             height: 20px; spacing: Theme.spacing-sm;
             SectionLabel { text: root.busy ? "●  " + root.status-text : "■  " + root.status-text; horizontal-stretch: 1; }
         }
-        if root.token-usage != "": Text {
+        if root.token-usage != "" && !root.animation-expanded: Text {
             text: root.token-usage; font-size: Theme.label-size; color: Theme.text-secondary; wrap: word-wrap;
             accessible-role: text; accessible-label: root.token-usage;
         }
@@ -304,5 +333,6 @@ export component AppWindow inherits Window {
                 dismiss-error => { root.settings-error = ""; }
             }
         }
+    }
     }
 }

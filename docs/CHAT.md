@@ -16,6 +16,8 @@ AI may answer without animation, verify code without creating animation, or crea
 
 Large animations scroll horizontally and vertically at readable natural sizes. Text blocks expand and wrap fully; dense structures expand the canvas instead of shrinking labels and nodes. Playback controls stay visible while scrolling. 动画画布支持横向和纵向滚动；图形、标签保持正常尺寸，长说明完整换行，后续面板自动让出空间。暂停时滚动也会刷新，播放和返回按钮保持可见。
 
+Use **全屏 (F11)** on the animation page to fill the screen with the animation and playback controls. **F11**, **Esc**, **退出全屏** or **返回对话** leave fullscreen. Playback and scroll position are preserved when toggling; the conversation sidebar and window toolbar return on exit. 全屏时隐藏主工具栏、会话侧栏、说明及导出栏，保留用例切换、播放控制和退出入口；退出后恢复原界面。模型或外观设置打开时，F11 不切换全屏。
+
 ## Token usage / Token 用量
 
 The footer shows input, output and total tokens for the selected conversation,

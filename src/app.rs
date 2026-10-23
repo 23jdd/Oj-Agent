@@ -229,6 +229,7 @@ fn switch_chat(ui: &AppWindow, state: &mut State, session: &str) -> Result<()> {
     state.preview_epoch = state.preview_epoch.wrapping_add(1);
     state.player = Player::default();
     ui.set_selected_session(session.into());
+    ui.set_animation_fullscreen(false);
     ui.set_animation_open(false);
     ui.set_playing(false);
     restore_draft(ui, state);
@@ -504,6 +505,7 @@ fn bind_conversation_navigation(ui: &AppWindow, state: Rc<RefCell<State>>) {
                 let mut s = state.borrow_mut();
                 s.player.playing = false;
                 ui.set_playing(false);
+                ui.set_animation_fullscreen(false);
                 ui.set_animation_open(false);
             }
         });
@@ -1122,6 +1124,169 @@ mod tests {
     }
 
     #[test]
+    fn animation_fullscreen_buttons_and_shortcuts_preserve_playback_and_chat() {
+        use i_slint_backend_testing::ElementHandle;
+        use slint::platform::{Key, WindowEvent};
+        i_slint_backend_testing::init_no_event_loop();
+        let ui = AppWindow::new().unwrap();
+        ui.set_selected_session("one".into());
+        ui.set_composer("全屏前的草稿".into());
+        ui.set_token_usage("本会话 Token：合计 42".into());
+        ui.show().unwrap();
+        ui.window().dispatch_event(WindowEvent::Resized {
+            size: slint::LogicalSize::new(960., 640.),
+        });
+        let press = |key: Key| {
+            slint::platform::update_timers_and_animations();
+            ui.window()
+                .dispatch_event(WindowEvent::KeyPressed { text: key.into() });
+            ui.window()
+                .dispatch_event(WindowEvent::KeyReleased { text: key.into() });
+            slint::platform::update_timers_and_animations();
+        };
+        press(Key::F11);
+        assert!(
+            !ui.get_animation_fullscreen(),
+            "chat should not enter animation fullscreen"
+        );
+        ui.set_animation_open(true);
+        ui.set_canvas_width(10_000.);
+        ui.set_canvas_height(12_000.);
+        ui.set_position(0.4);
+        ui.set_playing(true);
+        ui.set_preview_scroll_x(-200.);
+        ui.set_preview_scroll_y(-300.);
+        let normal = (ui.get_preview_width(), ui.get_preview_height());
+        ElementHandle::find_by_accessible_label(&ui, "全屏 (F11)")
+            .next()
+            .unwrap()
+            .invoke_accessible_default_action();
+        assert!(ui.get_animation_fullscreen());
+        assert!(ui.window().is_fullscreen());
+        slint::platform::update_timers_and_animations();
+        // Instantiate conditional panels before measuring their updated layout.
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "退出全屏 (Esc)")
+                .next()
+                .is_some()
+        );
+        assert!(ui.get_preview_width() > normal.0 && ui.get_preview_height() > normal.1);
+        assert!(
+            ui.get_preview_height() > 450.,
+            "fullscreen must reclaim the hidden toolbar and footer space: {} (normal {})",
+            ui.get_preview_height(),
+            normal.1
+        );
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "删除对话")
+                .next()
+                .is_none()
+        );
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "模型设置")
+                .next()
+                .is_none()
+        );
+        for label in ["退出全屏 (Esc)", "← 返回对话", "暂停", "下一步"] {
+            let element = ElementHandle::find_by_accessible_label(&ui, label)
+                .next()
+                .unwrap();
+            let pos = element.absolute_position();
+            let size = element.size();
+            assert!(
+                pos.x >= 0.
+                    && pos.y >= 0.
+                    && pos.x + size.width <= 961.
+                    && pos.y + size.height <= 641.,
+                "{label} must remain visible"
+            );
+        }
+        assert_eq!(ui.get_preview_scroll_x(), -200.);
+        assert_eq!(ui.get_preview_scroll_y(), -300.);
+        press(Key::Escape);
+        assert!(!ui.get_animation_fullscreen());
+        assert_eq!(ui.get_position(), 0.4);
+        assert!(ui.get_playing());
+        assert_eq!(ui.get_preview_scroll_y(), -300.);
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "删除对话")
+                .next()
+                .is_some()
+        );
+        press(Key::F11);
+        assert!(ui.get_animation_fullscreen());
+        ui.window().dispatch_event(WindowEvent::KeyPressRepeated {
+            text: Key::F11.into(),
+        });
+        assert!(
+            ui.get_animation_fullscreen(),
+            "holding F11 must not toggle repeatedly"
+        );
+        ElementHandle::find_by_accessible_label(&ui, "退出全屏 (Esc)")
+            .next()
+            .unwrap()
+            .invoke_accessible_default_action();
+        assert!(!ui.get_animation_fullscreen());
+        ElementHandle::find_by_accessible_label(&ui, "会话")
+            .next()
+            .unwrap()
+            .invoke_accessible_default_action();
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "删除对话")
+                .next()
+                .is_none()
+        );
+        press(Key::F11);
+        assert!(ui.get_animation_fullscreen());
+        press(Key::Escape);
+        assert!(
+            !ui.get_animation_fullscreen(),
+            "Esc must work even when the previously focused toolbar is removed"
+        );
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "删除对话")
+                .next()
+                .is_none(),
+            "a collapsed history panel must stay collapsed"
+        );
+        ElementHandle::find_by_accessible_label(&ui, "会话")
+            .next()
+            .unwrap()
+            .invoke_accessible_default_action();
+        ui.set_settings_open(true);
+        press(Key::F11);
+        assert!(
+            !ui.get_animation_fullscreen(),
+            "settings retain keyboard control"
+        );
+        ui.set_settings_open(false);
+        press(Key::F11);
+        assert!(ui.get_animation_fullscreen());
+        ElementHandle::find_by_accessible_label(&ui, "← 返回对话")
+            .next()
+            .unwrap()
+            .invoke_accessible_default_action();
+        assert!(!ui.get_animation_fullscreen());
+        press(Key::F11);
+        assert!(ui.get_animation_fullscreen());
+        ui.set_animation_open(false);
+        slint::platform::update_timers_and_animations();
+        assert!(!ui.get_animation_fullscreen());
+        assert_eq!(ui.get_composer(), "全屏前的草稿");
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "消息输入")
+                .next()
+                .is_some()
+        );
+        assert!(
+            ElementHandle::find_by_accessible_label(&ui, "删除对话")
+                .next()
+                .is_some()
+        );
+        ui.hide().unwrap();
+    }
+
+    #[test]
     fn navigation_and_stop_callbacks_preserve_chat_and_unlock_other_conversations() {
         i_slint_backend_testing::init_no_event_loop();
         let directory = tempfile::tempdir().unwrap();
@@ -1189,8 +1354,12 @@ mod tests {
         for _ in 0..3 {
             ui.invoke_open_link(format!("oj-animation:{artifact}").into());
             assert!(ui.get_animation_open());
+            ui.invoke_toggle_animation_fullscreen();
+            assert!(ui.get_animation_fullscreen());
             ui.invoke_back_to_chat();
+            slint::platform::update_timers_and_animations();
             assert!(!ui.get_animation_open());
+            assert!(!ui.get_animation_fullscreen());
             assert_eq!(ui.get_selected_session(), first);
             assert_eq!(ui.get_composer(), "保留的草稿");
             assert_eq!(ui.get_messages().row_count(), 1);

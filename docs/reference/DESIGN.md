@@ -49,6 +49,11 @@ treatment guide the native Slint components; React is not used.
   pixels, independently of the canvas extent, within the pixel budget. Debounce resize
   redraws by 120ms; scroll redraws also refresh paused frames immediately.
   Use the shared font-family token and keep small labels readable.
+- The animation page offers native fullscreen through its shared button and F11.
+  Hide application chrome and secondary information while keeping case selection,
+  playback, scrolling, return and an explicit exit control accessible. Esc and F11
+  exit fullscreen; returning to chat also exits. Preserve playback, scroll position
+  and the user's history-panel preference across toggles. Settings retain their shortcuts.
 - The **外观** editor configures shared font, color and geometry tokens. Keep
   editable values in a draft until validated and saved; retain the default
   Neobrutalism appearance. Offer coordinated palette presets, installed-font

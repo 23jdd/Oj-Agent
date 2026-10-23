@@ -19,11 +19,13 @@ export component AnimationPage inherits Rectangle {
     in-out property <int> case-index;
     in property <bool> busy;
     in property <bool> playing;
+    in property <bool> full-screen;
     in property <string> time-label;
     in-out property <float> position;
     in-out property <int> speed-index: 1;
     in-out property <string> export-path;
     callback back;
+    callback toggle-fullscreen;
     callback select-case(int);
     callback play-pause;
     callback step(bool);
@@ -39,8 +41,9 @@ export component AnimationPage inherits Rectangle {
             AppButton { text: "← 返回对话"; horizontal-stretch: 0; width: 128px; clicked => { root.back(); } }
             Text { text: root.title; color: Theme.text-primary; font-weight: 700; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
             SelectBox { model: root.case-names; current-index <=> root.case-index; width: 220px; horizontal-stretch: 0; enabled: !root.busy; selected(value) => { root.select-case(self.current-index); } }
+            AppButton { text: root.full-screen ? "退出全屏 (Esc)" : "全屏 (F11)"; selected: root.full-screen; width: 160px; horizontal-stretch: 0; clicked => { root.toggle-fullscreen(); } }
         }
-        ScrollView {
+        if !root.full-screen: ScrollView {
             min-height: 0px;
             preferred-height: min(80px, max(Theme.label-size * 1.5, basis.preferred-height));
             max-height: 80px;
@@ -80,7 +83,7 @@ export component AnimationPage inherits Rectangle {
             SelectBox { width: 80px; horizontal-stretch: 0; model: ["0.5×", "1×", "1.5×", "2×"]; current-index <=> root.speed-index; selected(value) => { root.change-speed(self.current-index); } }
             SectionLabel { text: root.time-label; }
         }
-        HorizontalLayout {
+        if !root.full-screen: HorizontalLayout {
             spacing: Theme.spacing-sm;
             TextField { text <=> root.export-path; field-label: "导出位置"; }
             AppButton { text: "导出 GIF"; width: 104px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.export-gif(); } }

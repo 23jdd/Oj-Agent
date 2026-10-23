@@ -31,7 +31,7 @@ For a release build, run `cargo build --release --locked` and launch the executa
 - Optional code verification and application-local animation links; no algorithm selectors or sample forms.
 - Normal, boundary and adversarial cases with separate playback timelines, seeking, stepping, speed control and GIF/JSON export.
 - Structured tree, graph, linked-list, grid and pointer visuals compiled from verified execution traces.
-- Scrollable animation canvases with readable text and shapes, complete explanations and fixed playback controls.
+- Scrollable animation canvases with readable text and shapes, complete explanations, fixed playback controls and fullscreen (F11/Esc).
 - Frameless Slint UI with Skia rendering, palette presets, installed/local fonts and saved appearance settings.
 - Configurable timeouts, retries, output budgets, reasoning strength and agent rounds.
 
