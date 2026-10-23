@@ -1,3 +1,8 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+#[cfg(windows)]
+mod startup;
+
 use clap::{Parser, Subcommand};
 use oj_agent::{
     app,
@@ -61,8 +66,20 @@ fn read_json(path: &std::path::Path) -> anyhow::Result<serde_json::Value> {
     Ok(serde_json::from_slice(&std::fs::read(path)?)?)
 }
 fn main() -> anyhow::Result<()> {
+    #[cfg(windows)]
+    if std::env::args_os().nth(1).is_some() {
+        startup::attach_parent_console();
+    }
     match Cli::parse().command {
-        None => app::run(),
+        None => {
+            let result = app::run();
+            #[cfg(windows)]
+            if let Err(error) = &result {
+                // Shortcut launches have no stderr console in which to show startup failures.
+                startup::show_error(error);
+            }
+            result
+        }
         Some(Command::Generate { input, output, gif }) => {
             let input = if let Some(path) = input {
                 parse_validated::<ProblemInput>(&read_json(&path)?)?
