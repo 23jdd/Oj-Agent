@@ -1,5 +1,3 @@
-# GIT.md
-
 # Git Workflow Guidelines
 
 This document defines the Git conventions for this repository.
@@ -732,7 +730,7 @@ The agent must:
 5. Review the final diff.
 6. Run relevant formatting and tests.
 7. Follow `AGENTS.md`.
-8. Follow `DESIGN.md` for visual changes.
+8. Follow [the current UI design rules](docs/reference/DESIGN.md) for visual changes.
 9. Follow this document for Git operations.
 
 The agent must not create commits unless explicitly asked to commit.
@@ -760,7 +758,7 @@ Before considering work complete:
 
 ---
 
-# Core Principle
+## Core Principle
 
 Git history should explain the evolution of the project.
 

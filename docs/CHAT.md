@@ -1,5 +1,7 @@
 # Chat workflow / 对话工作流
 
+[文档索引 / Documentation index](README.md)
+
 The desktop is a conversation, not an algorithm configuration form. Set a provider, model and API key in **模型设置**, then send normal messages. Replies render Markdown headings, emphasis, lists, quotes, fenced code, tables and links. Code blocks are selectable and scroll when long. Use **Ctrl+Enter** to send; **停止** cancels model work and sandbox execution. Provider, model, endpoint and API key are saved to a local settings file; keys never enter sessions.
 
 Conversations run independently: while A waits for an AI reply, switch to B or start a new conversation and send another request. A continues in the background; returning shows its own waiting state or completed reply. History marks running conversations with `…`. Each conversation permits one active reply or export, with its own cancellation token, status and errors. **停止** stops only the selected conversation. Deleting a conversation cancels its worker without interrupting the others; closing the application cancels all workers. Late events cannot overwrite another conversation or a newer request.

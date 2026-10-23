@@ -3,7 +3,9 @@
 [English](README.md)
 
 Rust 原生桌面对话工作区，用于与 AI 讨论代码、检查算法，并通过动画观察执行过程。
+
 ## 预览
+
 ![OJ Agent 动画预览](docs/preview.gif)
 
 ## 快速开始
@@ -82,4 +84,6 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 ## 文档
 
-[对话与沙箱](docs/CHAT.md) · [使用](docs/USAGE.md) · [外观](docs/STYLE.md) · [渲染器](docs/RENDERER.md) · [架构](ARCHITECTURE.md) · [IR](IR.md) · [工具](TOOL.md) · [会话](SESSIONS.md) · [错误](EXCEPTON.md) · [设计](DESIGN.md) · [许可证](LICENSE)
+[文档索引](docs/README.md) · [使用指南](docs/USAGE.md) · [对话与验证](docs/CHAT.md) · [外观配置](docs/STYLE.md) · [渲染说明](docs/RENDERER.md)
+
+贡献规范：[Agent 规则](AGENTS.md) · [Git 工作流](GIT.md) · [许可证](LICENSE)

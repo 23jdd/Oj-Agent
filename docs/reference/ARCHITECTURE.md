@@ -1,4 +1,8 @@
-# ARCHITECTURE.md
+# Architecture / 系统架构
+
+[文档索引 / Documentation index](../README.md)
+
+> Scope / 阅读范围：This is an architectural design reference. Some pipeline and directory examples describe intended boundaries rather than the exact current file layout. For the implemented desktop workflow, read [Chat](../CHAT.md), [Usage](../USAGE.md) and [src/lib.rs](../../src/lib.rs).
 
 ## Current desktop workflow
 
@@ -8,11 +12,9 @@ tools, call `sandbox.verify`, or publish verified multi-case animations via
 `animation.create`. Registered `oj-animation:` links navigate to a native page
 inside the application; they do not represent a web service. The portable
 JavaScript VM has no host capabilities. Original non-JavaScript source is not
-claimed to be executed when AI uses a translation. See [chat architecture](docs/CHAT.md).
+claimed to be executed when AI uses a translation. See [chat architecture](../CHAT.md).
 The IR/compiler/rendering layers below remain internal; the user no longer
 selects an algorithm template or fills sample forms.
-
-# OJ Resolve Animation Agent — Architecture
 
 ## 1. Overview
 
@@ -43,7 +45,7 @@ The LLM must not be tightly coupled to the rendering implementation.
 
 ---
 
-# 2. Core Design Principle
+## 2. Core Design Principle
 
 The architecture follows this pipeline:
 
@@ -73,7 +75,7 @@ The renderer must remain deterministic.
 
 ---
 
-# 3. High-Level Architecture
+## 3. High-Level Architecture
 
 ```text
 ┌─────────────────────────────┐
@@ -123,9 +125,9 @@ The renderer must remain deterministic.
 
 ---
 
-# 4. Major Modules
+## 4. Major Modules
 
-## 4.1 Input Layer
+### 4.1 Input Layer
 
 Responsible for normalizing user input.
 
@@ -159,7 +161,7 @@ Its responsibility is normalization only.
 
 ---
 
-# 5. Agent Orchestrator
+## 5. Agent Orchestrator
 
 The Agent Orchestrator coordinates all AI-related work.
 
@@ -200,7 +202,7 @@ Animation IR
 
 ---
 
-# 6. Problem Analyzer
+## 6. Problem Analyzer
 
 The Problem Analyzer extracts the semantic structure of an OJ problem.
 
@@ -256,7 +258,7 @@ Important entities:
 
 ---
 
-# 7. Code Analyzer
+## 7. Code Analyzer
 
 The Code Analyzer converts source code into algorithm-level semantics.
 
@@ -305,7 +307,7 @@ For each index:
 
 ---
 
-# 8. Algorithm Model
+## 8. Algorithm Model
 
 The Algorithm Model represents the algorithm independently from:
 
@@ -349,7 +351,7 @@ It does not describe:
 
 ---
 
-# 9. Trace Generator
+## 9. Trace Generator
 
 The Trace Generator converts an algorithm execution into discrete events.
 
@@ -426,7 +428,7 @@ Finish
 
 ---
 
-# 10. Trace IR
+## 10. Trace IR
 
 The trace format should remain generic.
 
@@ -461,7 +463,7 @@ Prefer real execution traces over LLM-invented traces.
 
 ---
 
-# 11. Visualization Planner
+## 11. Visualization Planner
 
 The Visualization Planner converts semantic events into a visual explanation.
 
@@ -510,7 +512,7 @@ The planner produces a `VisualizationPlan`.
 
 ---
 
-# 12. Visualization Model
+## 12. Visualization Model
 
 Example:
 
@@ -536,7 +538,7 @@ VisualizationPlan {
 
 ---
 
-# 13. Animation IR
+## 13. Animation IR
 
 Animation IR is the final renderer-independent animation description.
 
@@ -576,7 +578,7 @@ Example:
 
 ---
 
-# 14. Animation Actions
+## 14. Animation Actions
 
 Core animation primitives should remain small.
 
@@ -618,7 +620,7 @@ Complex animation should be built by composing these primitives.
 
 ---
 
-# 15. Scene Model
+## 15. Scene Model
 
 A scene consists of visual objects.
 
@@ -659,7 +661,7 @@ Shape
 
 ---
 
-# 16. Visual Semantic Components
+## 16. Visual Semantic Components
 
 Prefer semantic visualization components over raw drawing primitives.
 
@@ -694,7 +696,7 @@ Semantic components make generated animations more robust.
 
 ---
 
-# 17. Renderer
+## 17. Renderer
 
 The Renderer consumes Animation IR.
 
@@ -737,7 +739,7 @@ Renderer {
 
 ---
 
-# 18. Preview
+## 18. Preview
 
 Interactive preview should support:
 
@@ -765,7 +767,7 @@ Avoid separate preview and export animation logic.
 
 ---
 
-# 19. Export Pipeline
+## 19. Export Pipeline
 
 Supported output formats may include:
 
@@ -796,7 +798,7 @@ GIF / MP4 / WebM
 
 ---
 
-# 20. Agent Output Validation
+## 20. Agent Output Validation
 
 All LLM-generated structured output must be validated.
 
@@ -831,7 +833,7 @@ Validation examples:
 
 ---
 
-# 21. Deterministic vs AI Responsibilities
+## 21. Deterministic vs AI Responsibilities
 
 AI is good at:
 
@@ -857,7 +859,7 @@ Prefer deterministic systems whenever possible.
 
 ---
 
-# 22. Source Code Execution
+## 22. Source Code Execution
 
 Where practical, source code should be instrumented and executed.
 
@@ -879,7 +881,7 @@ This is more reliable than asking the LLM:
 
 ---
 
-# 23. Language Adapters
+## 23. Language Adapters
 
 Execution tracing should use language-specific adapters.
 
@@ -914,7 +916,7 @@ Trace IR
 
 ---
 
-# 24. Algorithm Visualization Templates
+## 24. Algorithm Visualization Templates
 
 Common algorithms should use templates.
 
@@ -943,7 +945,7 @@ The Agent should customize templates instead of generating every animation from 
 
 ---
 
-# 25. Example End-to-End Flow
+## 25. Example End-to-End Flow
 
 Input:
 
@@ -990,15 +992,21 @@ two-sum.mp4
 
 ---
 
-# 26. Suggested Directory Structure
+## 26. Suggested Directory Structure
 
 ```text
 project/
 ├── AGENTS.md
-├── DESIGN.md
 ├── GIT.md
-├── ARCHITECTURE.md
-├── EXCEPTION.md
+├── README.md
+├── README.zh-CN.md
+├── docs/
+│   ├── README.md
+│   ├── CHAT.md / USAGE.md / STYLE.md / RENDERER.md
+│   ├── reference/
+│   │   ├── ARCHITECTURE.md / DESIGN.md / ERROR_HANDLING.md
+│   │   └── IR.md / TOOLS.md / SESSIONS.md
+│   └── archive/
 │
 ├── src/
 │   ├── agent/
@@ -1052,7 +1060,7 @@ Module boundaries are more important than directory names.
 
 ---
 
-# 27. Dependency Direction
+## 27. Dependency Direction
 
 Dependencies should flow downward.
 
@@ -1092,7 +1100,7 @@ Algorithm logic must not depend on visual implementation.
 
 ---
 
-# 28. Serialization
+## 28. Serialization
 
 Important intermediate representations should be serializable.
 
@@ -1117,7 +1125,7 @@ Benefits:
 
 ---
 
-# 29. Caching
+## 29. Caching
 
 AI calls may be expensive.
 
@@ -1142,7 +1150,7 @@ Execution traces should also be cacheable.
 
 ---
 
-# 30. Versioning
+## 30. Versioning
 
 IR formats should include versions.
 
@@ -1159,11 +1167,11 @@ Do not silently change serialized formats.
 
 ---
 
-# 31. Testing Strategy
+## 31. Testing Strategy
 
 Tests should exist at each boundary.
 
-## Unit Tests
+### Unit Tests
 
 Test:
 
@@ -1175,7 +1183,7 @@ interpolation
 validation
 ```
 
-## Golden Tests
+### Golden Tests
 
 Input:
 
@@ -1190,7 +1198,7 @@ Expected:
 known Animation IR
 ```
 
-## Snapshot Tests
+### Snapshot Tests
 
 Useful for:
 
@@ -1200,7 +1208,7 @@ scene graph
 rendered frames
 ```
 
-## Integration Tests
+### Integration Tests
 
 Test full flow:
 
@@ -1214,7 +1222,7 @@ Problem
 
 ---
 
-# 32. Observability
+## 32. Observability
 
 Each generation job should have an ID.
 
@@ -1243,7 +1251,7 @@ Logs must make it possible to answer:
 
 ---
 
-# 33. Failure Isolation
+## 33. Failure Isolation
 
 Each pipeline stage should fail independently.
 
@@ -1264,11 +1272,11 @@ Generation failed.
 
 Errors must retain stage information.
 
-Detailed error rules are defined in `EXCEPTION.md`.
+Detailed error rules are defined in [ERROR_HANDLING.md](ERROR_HANDLING.md).
 
 ---
 
-# 34. Extensibility
+## 34. Extensibility
 
 The architecture should allow future support for:
 
@@ -1287,7 +1295,7 @@ without rewriting the entire pipeline.
 
 ---
 
-# 35. Non-Goals
+## 35. Non-Goals
 
 The core system should not initially attempt to:
 
@@ -1301,7 +1309,7 @@ Start with common OJ algorithm patterns.
 
 ---
 
-# 36. MVP Scope
+## 36. MVP Scope
 
 Recommended initial MVP:
 
@@ -1347,7 +1355,7 @@ The MVP should prioritize correctness and understandability over visual complexi
 
 ---
 
-# 37. Architectural Principle
+## 37. Architectural Principle
 
 Whenever deciding where logic belongs, ask:
 
@@ -1387,7 +1395,7 @@ This boundary must remain clear.
 
 ---
 
-# Final Principle
+## Final Principle
 
 The system should not be:
 

@@ -1,5 +1,7 @@
 # Appearance configuration / 外观配置
 
+[文档索引 / Documentation index](README.md)
+
 Open **外观** in the desktop header. Start with a **经典黄 / 薄荷绿 / 浅紫** palette, choose an installed font from the dropdown or click **本地文件…**, and adjust sizes with **− / +**. Color fields offer clickable swatches and custom `#RRGGBB` input. The sample previews the draft immediately. Click **保存并应用** to update the UI, paused or playing previews, and subsequent GIF exports without restarting. **取消** discards edits; **恢复默认** resets the draft and takes effect only after saving. Palette presets change colors only, preserving fonts and dimensions.
 
 在顶部打开“外观”，可一键选择配色、下拉选择系统字体、点击“本地文件…”导入字体，或用加减按钮调整字号。下方示例会即时预览，点击“保存并应用”后才会改变实际界面。取消保留原外观；恢复默认后仍需保存。预览和 GIF 导出共用相同配置。

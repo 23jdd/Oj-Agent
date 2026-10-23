@@ -1,3 +1,5 @@
+# Test font fixture / 测试字体资源
+
 `Abel-Regular.ttf` is a small font fixture for offline local-font import and
 rendering tests. It is not bundled into the application executable or installed.
 

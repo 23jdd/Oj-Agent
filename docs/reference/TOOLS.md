@@ -1,4 +1,8 @@
-# TOOLS.md
+# Tools / 工具协议
+
+[文档索引 / Documentation index](../README.md)
+
+> Scope / 阅读范围：The current chat tool protocol appears first. The broader catalogue also contains design-level interfaces and examples; it does not imply every listed tool is available. Run `cargo run --locked -- tool` for the actual CLI tool list, and see [Chat](../CHAT.md#tools-and-verification) for the desktop tools.
 
 ## Current chat tools
 
@@ -6,7 +10,7 @@ The conversation agent calls `sandbox.verify` for bounded portable JavaScript
 checks and `animation.create` for publishing multi-case animations from those
 execution traces. No algorithm selector is exposed in the desktop. Verification
 may be used without animation, and ordinary replies need no tools. Animation
-links open inside the native application. See [implemented protocol and limits](docs/CHAT.md).
+links open inside the native application. See [implemented protocol and limits](../CHAT.md).
 The native execution and IR tools below remain separate facilities.
 
 Structured execution observations may include stable node IDs, labels, node
@@ -18,8 +22,6 @@ pointer, cell and text limits are enforced by the sandbox and the animation
 compiler; dangling references and mismatched layouts return actionable tool
 errors.
 
-# Tool Specification
-
 ## 1. Purpose
 
 This document defines the tool interface used by the OJ Resolve Animation Agent.
@@ -30,7 +32,8 @@ Instead, it should delegate precise and deterministic work to tools.
 
 The core principle is:
 
-> The Agent decides what to do.  
+> The Agent decides what to do.
+>
 > Tools perform concrete operations.
 
 Tools should be:
@@ -45,7 +48,7 @@ Tools should be:
 
 ---
 
-# 2. Tool Categories
+## 2. Tool Categories
 
 The tool system is divided into:
 
@@ -84,7 +87,7 @@ Render / Export Tools
 
 ---
 
-# 3. Tool Naming
+## 3. Tool Naming
 
 Use namespaced tool names.
 
@@ -132,7 +135,7 @@ execute_all
 
 ---
 
-# 4. Tool Design Rules
+## 4. Tool Design Rules
 
 Every tool should have:
 
@@ -151,7 +154,7 @@ Avoid returning unstructured text when a machine-readable result is possible.
 
 ---
 
-# 5. Tool Result Envelope
+## 5. Tool Result Envelope
 
 Recommended common tool result:
 
@@ -176,15 +179,15 @@ On failure:
 }
 ```
 
-Detailed errors should follow `EXCEPTION.md`.
+Detailed errors should follow [ERROR_HANDLING.md](ERROR_HANDLING.md).
 
 ---
 
-# 6. Deterministic vs AI-Assisted Tools
+## 6. Deterministic vs AI-Assisted Tools
 
 Tools are classified as:
 
-## Deterministic
+### Deterministic
 
 Same input should produce equivalent output.
 
@@ -203,7 +206,7 @@ render.export
 
 ---
 
-## AI-Assisted
+### AI-Assisted
 
 Output may vary.
 
@@ -219,13 +222,13 @@ AI-assisted tools must still return validated structured output.
 
 ---
 
-# 7. problem.parse
+## 7. problem.parse
 
-## Purpose
+### Purpose
 
 Parse raw OJ problem text into a structured problem model.
 
-## Input
+### Input
 
 ```json
 {
@@ -242,7 +245,7 @@ Optional:
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -256,7 +259,7 @@ Optional:
 }
 ```
 
-## Notes
+### Notes
 
 This tool should extract structure only.
 
@@ -264,13 +267,13 @@ It should not generate animation instructions.
 
 ---
 
-# 8. problem.classify
+## 8. problem.classify
 
-## Purpose
+### Purpose
 
 Classify the problem into algorithm and visualization categories.
 
-## Input
+### Input
 
 ```json
 {
@@ -278,7 +281,7 @@ Classify the problem into algorithm and visualization categories.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -318,13 +321,13 @@ simulation
 
 ---
 
-# 9. code.detect_language
+## 9. code.detect_language
 
-## Purpose
+### Purpose
 
 Detect source code language.
 
-## Input
+### Input
 
 ```json
 {
@@ -332,7 +335,7 @@ Detect source code language.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -357,13 +360,13 @@ unknown
 
 ---
 
-# 10. code.analyze
+## 10. code.analyze
 
-## Purpose
+### Purpose
 
 Analyze source code semantically.
 
-## Input
+### Input
 
 ```json
 {
@@ -372,7 +375,7 @@ Analyze source code semantically.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -392,13 +395,13 @@ It should not emit final Animation IR.
 
 ---
 
-# 11. code.compile
+## 11. code.compile
 
-## Purpose
+### Purpose
 
 Compile user code inside a sandbox.
 
-## Input
+### Input
 
 ```json
 {
@@ -408,7 +411,7 @@ Compile user code inside a sandbox.
 }
 ```
 
-## Output
+### Output
 
 Success:
 
@@ -430,7 +433,7 @@ Failure:
 }
 ```
 
-## Rules
+### Rules
 
 Compilation must happen in a sandbox.
 
@@ -438,13 +441,13 @@ Do not compile untrusted code in the main process.
 
 ---
 
-# 12. code.run
+## 12. code.run
 
-## Purpose
+### Purpose
 
 Execute compiled code.
 
-## Input
+### Input
 
 ```json
 {
@@ -462,7 +465,7 @@ Optional limits:
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -475,15 +478,15 @@ Optional limits:
 
 ---
 
-# 13. code.trace
+## 13. code.trace
 
-## Purpose
+### Purpose
 
 Execute code and produce standardized Trace IR.
 
 This is one of the most important tools in the system.
 
-## Input
+### Input
 
 ```json
 {
@@ -495,7 +498,7 @@ This is one of the most important tools in the system.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -503,21 +506,21 @@ This is one of the most important tools in the system.
 }
 ```
 
-The result must follow `IR.md`.
+The result must follow [the IR specification](IR.md).
 
-## Rule
+### Rule
 
 Prefer real runtime traces over AI-inferred traces.
 
 ---
 
-# 14. trace.simulate
+## 14. trace.simulate
 
-## Purpose
+### Purpose
 
 Generate a conceptual trace when executable code is unavailable.
 
-## Input
+### Input
 
 ```json
 {
@@ -526,7 +529,7 @@ Generate a conceptual trace when executable code is unavailable.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -536,21 +539,21 @@ Generate a conceptual trace when executable code is unavailable.
 }
 ```
 
-## Rule
+### Rule
 
 This output must never be marked as runtime-verified.
 
 ---
 
-# 15. trace.inspect
+## 15. trace.inspect
 
-## Purpose
+### Purpose
 
 Inspect and summarize Trace IR.
 
 Useful for debugging and Agent reasoning.
 
-## Input
+### Input
 
 ```json
 {
@@ -558,7 +561,7 @@ Useful for debugging and Agent reasoning.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -571,13 +574,13 @@ Useful for debugging and Agent reasoning.
 
 ---
 
-# 16. ir.validate
+## 16. ir.validate
 
-## Purpose
+### Purpose
 
 Validate any IR document.
 
-## Input
+### Input
 
 ```json
 {
@@ -595,7 +598,7 @@ visualization
 animation
 ```
 
-## Output
+### Output
 
 Valid:
 
@@ -623,13 +626,13 @@ Invalid:
 
 ---
 
-# 17. ir.read
+## 17. ir.read
 
-## Purpose
+### Purpose
 
 Read a serialized IR file.
 
-## Input
+### Input
 
 ```json
 {
@@ -637,7 +640,7 @@ Read a serialized IR file.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -648,13 +651,13 @@ Read a serialized IR file.
 
 ---
 
-# 18. ir.write
+## 18. ir.write
 
-## Purpose
+### Purpose
 
 Write IR to a file for debugging, caching, or reproducibility.
 
-## Input
+### Input
 
 ```json
 {
@@ -663,7 +666,7 @@ Write IR to a file for debugging, caching, or reproducibility.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -674,13 +677,13 @@ Write IR to a file for debugging, caching, or reproducibility.
 
 ---
 
-# 19. ir.migrate
+## 19. ir.migrate
 
-## Purpose
+### Purpose
 
 Migrate an IR document between schema versions.
 
-## Input
+### Input
 
 ```json
 {
@@ -691,7 +694,7 @@ Migrate an IR document between schema versions.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -702,13 +705,13 @@ Migrate an IR document between schema versions.
 
 ---
 
-# 20. visualization.apply_template
+## 20. visualization.apply_template
 
-## Purpose
+### Purpose
 
 Apply a known visualization template.
 
-## Input
+### Input
 
 ```json
 {
@@ -718,7 +721,7 @@ Apply a known visualization template.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -744,19 +747,19 @@ dp-table
 union-find
 ```
 
-## Rule
+### Rule
 
 Prefer templates over fully AI-generated visualization when a suitable template exists.
 
 ---
 
-# 21. visualization.plan
+## 21. visualization.plan
 
-## Purpose
+### Purpose
 
 Generate Visualization IR for algorithms that need custom planning.
 
-## Input
+### Input
 
 ```json
 {
@@ -766,7 +769,7 @@ Generate Visualization IR for algorithms that need custom planning.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -774,7 +777,7 @@ Generate Visualization IR for algorithms that need custom planning.
 }
 ```
 
-## Rule
+### Rule
 
 Output must be validated with:
 
@@ -786,13 +789,13 @@ before animation compilation.
 
 ---
 
-# 22. visualization.inspect
+## 22. visualization.inspect
 
-## Purpose
+### Purpose
 
 Inspect visualization structure.
 
-## Input
+### Input
 
 ```json
 {
@@ -800,7 +803,7 @@ Inspect visualization structure.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -813,13 +816,13 @@ Inspect visualization structure.
 
 ---
 
-# 23. animation.compile
+## 23. animation.compile
 
-## Purpose
+### Purpose
 
 Compile Trace IR + Visualization IR into deterministic Animation IR.
 
-## Input
+### Input
 
 ```json
 {
@@ -828,7 +831,7 @@ Compile Trace IR + Visualization IR into deterministic Animation IR.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -836,7 +839,7 @@ Compile Trace IR + Visualization IR into deterministic Animation IR.
 }
 ```
 
-## Rule
+### Rule
 
 This tool should preferably be deterministic.
 
@@ -844,13 +847,13 @@ Do not require an LLM for normal compilation.
 
 ---
 
-# 24. animation.validate
+## 24. animation.validate
 
-## Purpose
+### Purpose
 
 Validate Animation IR.
 
-## Checks
+### Checks
 
 ```text
 duplicate IDs
@@ -862,7 +865,7 @@ unsupported actions
 non-finite numeric values
 ```
 
-## Input
+### Input
 
 ```json
 {
@@ -870,7 +873,7 @@ non-finite numeric values
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -882,13 +885,13 @@ non-finite numeric values
 
 ---
 
-# 25. animation.inspect
+## 25. animation.inspect
 
-## Purpose
+### Purpose
 
 Inspect timeline and object structure.
 
-## Output Example
+### Output Example
 
 ```json
 {
@@ -901,9 +904,9 @@ Inspect timeline and object structure.
 
 ---
 
-# 26. animation.optimize
+## 26. animation.optimize
 
-## Purpose
+### Purpose
 
 Simplify or optimize Animation IR.
 
@@ -917,7 +920,7 @@ deduplicate styles
 reduce unnecessary keyframes
 ```
 
-## Input
+### Input
 
 ```json
 {
@@ -925,7 +928,7 @@ reduce unnecessary keyframes
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -936,13 +939,13 @@ reduce unnecessary keyframes
 
 ---
 
-# 27. render.preview
+## 27. render.preview
 
-## Purpose
+### Purpose
 
 Create an interactive preview session.
 
-## Input
+### Input
 
 ```json
 {
@@ -950,7 +953,7 @@ Create an interactive preview session.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -973,13 +976,13 @@ speed
 
 ---
 
-# 28. render.frame
+## 28. render.frame
 
-## Purpose
+### Purpose
 
 Render a single frame at a specific timestamp.
 
-## Input
+### Input
 
 ```json
 {
@@ -990,7 +993,7 @@ Render a single frame at a specific timestamp.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1002,13 +1005,13 @@ This tool is useful for automated visual inspection.
 
 ---
 
-# 29. render.frames
+## 29. render.frames
 
-## Purpose
+### Purpose
 
 Render a frame range.
 
-## Input
+### Input
 
 ```json
 {
@@ -1019,7 +1022,7 @@ Render a frame range.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1029,9 +1032,9 @@ Render a frame range.
 
 ---
 
-# 30. render.inspect
+## 30. render.inspect
 
-## Purpose
+### Purpose
 
 Analyze rendered frames for common visual issues.
 
@@ -1046,7 +1049,7 @@ unreadable labels
 unexpected empty scene
 ```
 
-## Input
+### Input
 
 ```json
 {
@@ -1054,7 +1057,7 @@ unexpected empty scene
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1071,13 +1074,13 @@ This may be AI-assisted or rule-based.
 
 ---
 
-# 31. render.export
+## 31. render.export
 
-## Purpose
+### Purpose
 
 Export the final animation.
 
-## Input
+### Input
 
 ```json
 {
@@ -1099,7 +1102,7 @@ gif
 png-sequence
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1110,9 +1113,9 @@ png-sequence
 
 ---
 
-# 32. asset.load
+## 32. asset.load
 
-## Purpose
+### Purpose
 
 Load external visual assets.
 
@@ -1125,7 +1128,7 @@ image
 background
 ```
 
-## Input
+### Input
 
 ```json
 {
@@ -1133,7 +1136,7 @@ background
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1144,13 +1147,13 @@ background
 
 ---
 
-# 33. template.list
+## 33. template.list
 
-## Purpose
+### Purpose
 
 List available algorithm visualization templates.
 
-## Output
+### Output
 
 ```json
 {
@@ -1167,13 +1170,13 @@ List available algorithm visualization templates.
 
 ---
 
-# 34. template.get
+## 34. template.get
 
-## Purpose
+### Purpose
 
 Load template metadata.
 
-## Input
+### Input
 
 ```json
 {
@@ -1181,7 +1184,7 @@ Load template metadata.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1197,13 +1200,13 @@ Load template metadata.
 
 ---
 
-# 35. cache.get
+## 35. cache.get
 
-## Purpose
+### Purpose
 
 Read cached intermediate output.
 
-## Input
+### Input
 
 ```json
 {
@@ -1211,7 +1214,7 @@ Read cached intermediate output.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1222,13 +1225,13 @@ Read cached intermediate output.
 
 ---
 
-# 36. cache.put
+## 36. cache.put
 
-## Purpose
+### Purpose
 
 Store reusable output.
 
-## Input
+### Input
 
 ```json
 {
@@ -1237,7 +1240,7 @@ Store reusable output.
 }
 ```
 
-## Output
+### Output
 
 ```json
 {
@@ -1247,9 +1250,9 @@ Store reusable output.
 
 ---
 
-# 37. project.read
+## 37. project.read
 
-## Purpose
+### Purpose
 
 Read project configuration or template files.
 
@@ -1257,8 +1260,8 @@ Examples:
 
 ```text
 AGENTS.md
-DESIGN.md
-IR.md
+docs/reference/DESIGN.md
+docs/reference/IR.md
 template definitions
 ```
 
@@ -1266,9 +1269,9 @@ This should be read-only unless explicitly writing project files.
 
 ---
 
-# 38. project.write
+## 38. project.write
 
-## Purpose
+### Purpose
 
 Write generated project artifacts.
 
@@ -1286,7 +1289,7 @@ Do not use this tool to silently modify unrelated source files.
 
 ---
 
-# 39. Tool Safety
+## 39. Tool Safety
 
 Tools that execute user code must be sandboxed.
 
@@ -1312,7 +1315,7 @@ output limit
 
 ---
 
-# 40. Tool Permissions
+## 40. Tool Permissions
 
 Some tools are read-only.
 
@@ -1341,7 +1344,7 @@ Side effects must be explicit.
 
 ---
 
-# 41. Agent Tool Policy
+## 41. Agent Tool Policy
 
 The Agent should:
 
@@ -1354,7 +1357,7 @@ The Agent should:
 
 ---
 
-# 42. Preferred Tool Sequence
+## 42. Preferred Tool Sequence
 
 Typical full generation flow:
 
@@ -1388,7 +1391,7 @@ render.export
 
 ---
 
-# 43. Without Source Code
+## 43. Without Source Code
 
 If no source code is available:
 
@@ -1410,7 +1413,7 @@ The output must clearly mark the trace as inferred.
 
 ---
 
-# 44. Automatic Repair Flow
+## 44. Automatic Repair Flow
 
 If AI-generated IR fails validation:
 
@@ -1430,7 +1433,7 @@ Do not regenerate the entire pipeline unnecessarily.
 
 ---
 
-# 45. Visual Repair Flow
+## 45. Visual Repair Flow
 
 If rendered output is visually poor:
 
@@ -1452,7 +1455,7 @@ Prefer fixing Visualization IR rather than manually patching rendered pixels.
 
 ---
 
-# 46. Tool Boundaries
+## 46. Tool Boundaries
 
 Tools should not cross architectural layers unnecessarily.
 
@@ -1472,7 +1475,7 @@ It should not analyze algorithms.
 
 ---
 
-# 47. MVP Tool Set
+## 47. MVP Tool Set
 
 The first version should implement only the most important tools.
 
@@ -1503,7 +1506,7 @@ This is sufficient for a useful end-to-end system.
 
 ---
 
-# 48. Priority Tools
+## 48. Priority Tools
 
 Highest priority:
 
@@ -1518,7 +1521,7 @@ These tools provide the most architectural value.
 
 ---
 
-# 49. Example Agent Session
+## 49. Example Agent Session
 
 User:
 
@@ -1584,7 +1587,7 @@ render.export(format="mp4")
 
 ---
 
-# 50. Final Principle
+## 50. Final Principle
 
 The Agent should not be the executor of low-level work.
 

@@ -3,7 +3,9 @@
 [中文](README.zh-CN.md)
 
 A native Rust desktop workspace for discussing code with AI, checking algorithms and exploring their execution as animations.
+
 ## Preview
+
 ![OJ Agent animation preview](docs/preview.gif)
 
 ## Quick start
@@ -82,4 +84,6 @@ Run `cargo run --locked -- tool` to list CLI tools. See [usage and CLI examples]
 
 ## Documentation
 
-[Chat and sandbox](docs/CHAT.md) · [Usage](docs/USAGE.md) · [Appearance](docs/STYLE.md) · [Renderer](docs/RENDERER.md) · [Architecture](ARCHITECTURE.md) · [IR](IR.md) · [Tools](TOOL.md) · [Sessions](SESSIONS.md) · [Errors](EXCEPTON.md) · [Design](DESIGN.md) · [License](LICENSE)
+[Documentation index](docs/README.md) · [Usage](docs/USAGE.md) · [Chat and verification](docs/CHAT.md) · [Appearance](docs/STYLE.md) · [Rendering](docs/RENDERER.md)
+
+Contributors: [Agent instructions](AGENTS.md) · [Git workflow](GIT.md) · [License](LICENSE)

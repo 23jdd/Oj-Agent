@@ -1,5 +1,7 @@
 # Skia animation renderer
 
+[文档索引 / Documentation index](README.md)
+
 This renderer applies ideas studied in [23jdd/animation](https://github.com/23jdd/animation/tree/d845bfad88bd9794bf1270542e510ed0557c5795): absolute-time evaluation, renderer-independent object state, cached rendering resources, and a shared preview/export timeline. The primary references are its [architecture](https://github.com/23jdd/animation/blob/d845bfad88bd9794bf1270542e510ed0557c5795/Architecture.md), [timeline](https://github.com/23jdd/animation/blob/d845bfad88bd9794bf1270542e510ed0557c5795/timeline/timeline.go) and [renderer interface](https://github.com/23jdd/animation/blob/d845bfad88bd9794bf1270542e510ed0557c5795/renderer/renderer.go). The implementation here uses Rust, skia-safe and the existing OJ IR.
 
 ## Rendering path

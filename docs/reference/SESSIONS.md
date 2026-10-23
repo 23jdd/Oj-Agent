@@ -1,4 +1,8 @@
-# SESSION.md
+# Sessions / 会话与持久化
+
+[文档索引 / Documentation index](../README.md)
+
+> Scope / 阅读范围：Current conversation storage appears first. The extended model below describes design responsibilities; conceptual fields and examples are not the exact SQLite schema. The implementation is [src/session.rs](../../src/session.rs), with the desktop behavior documented in [Chat](../CHAT.md).
 
 ## Current conversation storage
 
@@ -7,7 +11,7 @@ existing SQLite sessions. Tool requests, verification reports and `chat-animatio
 bundles remain immutable artifacts with dependencies. Each bundle contains its
 named case timelines and verification basis. Application-local links resolve
 only inside their owning conversation. Existing session/IR records are retained.
-See [current chat workflow](docs/CHAT.md).
+See [current chat workflow](../CHAT.md).
 
 The additive `token_usage` table stores one UUID-keyed record per returned chat
 model response, scoped to its conversation. Records contain the originating user
@@ -16,8 +20,6 @@ or raw provider responses are stored. Repeated record IDs are ignored. Totals ar
 computed from these records and survive restart. Deleting a conversation cascades
 to its usage; late cancelled workers cannot recreate deleted records. Existing
 messages are preserved, and historical usage cannot be backfilled.
-
-# Session Model Specification
 
 ## 1. Purpose
 
@@ -45,7 +47,7 @@ The core principle is:
 
 ---
 
-# 2. Session Responsibilities
+## 2. Session Responsibilities
 
 A session is responsible for tracking:
 
@@ -68,7 +70,7 @@ A session should make the entire generation workflow reproducible and inspectabl
 
 ---
 
-# 3. Session Is Not
+## 3. Session Is Not
 
 A session is not:
 
@@ -83,7 +85,7 @@ A session coordinates and records interactions between these systems.
 
 ---
 
-# 4. High-Level Model
+## 4. High-Level Model
 
 ```text
 User
@@ -116,7 +118,7 @@ Session
 
 ---
 
-# 5. Session Lifecycle
+## 5. Session Lifecycle
 
 A session follows this lifecycle:
 
@@ -154,7 +156,7 @@ Cancelled
 
 ---
 
-# 6. Session State
+## 6. Session State
 
 Conceptual model:
 
@@ -182,7 +184,7 @@ Session {
 
 ---
 
-# 7. Session ID
+## 7. Session ID
 
 Every session must have a unique stable ID.
 
@@ -198,7 +200,7 @@ All generated artifacts should reference the session ID when appropriate.
 
 ---
 
-# 8. Session Input
+## 8. Session Input
 
 Session input represents the original user request.
 
@@ -230,7 +232,7 @@ visual_preferences
 
 ---
 
-# 9. Input Immutability
+## 9. Input Immutability
 
 Original session input should be preserved.
 
@@ -249,7 +251,7 @@ or maintain an explicit change history.
 
 ---
 
-# 10. Session Context
+## 10. Session Context
 
 Session context contains information derived from the original request.
 
@@ -268,7 +270,7 @@ Context should contain useful high-level information, not duplicate every artifa
 
 ---
 
-# 11. Current Stage
+## 11. Current Stage
 
 The session should track its current pipeline stage.
 
@@ -299,7 +301,7 @@ Example:
 
 ---
 
-# 12. Session and Pipeline
+## 12. Session and Pipeline
 
 A typical session progresses through:
 
@@ -327,7 +329,7 @@ A session should preserve the result of every successfully completed stage.
 
 ---
 
-# 13. Artifact Model
+## 13. Artifact Model
 
 All meaningful generated outputs should be stored as artifacts.
 
@@ -360,7 +362,7 @@ Artifact {
 
 ---
 
-# 14. Artifact Kinds
+## 14. Artifact Kinds
 
 Recommended artifact types:
 
@@ -390,7 +392,7 @@ ValidationReport
 
 ---
 
-# 15. Artifact Identity
+## 15. Artifact Identity
 
 Artifacts should have stable IDs.
 
@@ -409,7 +411,7 @@ Artifact IDs should remain stable.
 
 ---
 
-# 16. Artifact Versioning
+## 16. Artifact Versioning
 
 Artifacts may have multiple versions during revision.
 
@@ -433,7 +435,7 @@ Example:
 
 ---
 
-# 17. Immutable Artifact Principle
+## 17. Immutable Artifact Principle
 
 Prefer treating generated artifacts as immutable.
 
@@ -461,7 +463,7 @@ Benefits:
 
 ---
 
-# 18. Derived Artifacts
+## 18. Derived Artifacts
 
 Artifacts should record what they were derived from.
 
@@ -488,7 +490,7 @@ Metadata example:
 
 ---
 
-# 19. Dependency Graph
+## 19. Dependency Graph
 
 Artifact dependencies form a DAG.
 
@@ -518,7 +520,7 @@ This dependency graph helps invalidate downstream artifacts when upstream data c
 
 ---
 
-# 20. Artifact Invalidation
+## 20. Artifact Invalidation
 
 If an upstream artifact changes, dependent artifacts may become stale.
 
@@ -546,7 +548,7 @@ invalid
 
 ---
 
-# 21. Agent State
+## 21. Agent State
 
 The session may store limited Agent state.
 
@@ -566,7 +568,7 @@ Store decisions and structured reasoning summaries instead.
 
 ---
 
-# 22. Decision Records
+## 22. Decision Records
 
 Important Agent decisions should be recorded explicitly.
 
@@ -584,7 +586,7 @@ Decision records should be concise and inspectable.
 
 ---
 
-# 23. Tool Call History
+## 23. Tool Call History
 
 Every important tool invocation should be recorded.
 
@@ -605,7 +607,7 @@ ToolCall {
 
 ---
 
-# 24. Tool Call Example
+## 24. Tool Call Example
 
 ```json
 {
@@ -620,7 +622,7 @@ ToolCall {
 
 ---
 
-# 25. Avoid Storing Large Tool Payloads Inline
+## 25. Avoid Storing Large Tool Payloads Inline
 
 Large data should be referenced by artifact ID.
 
@@ -636,7 +638,7 @@ instead of embedding a 10 MB trace into session metadata.
 
 ---
 
-# 26. Tool Call Status
+## 26. Tool Call Status
 
 Recommended status values:
 
@@ -652,7 +654,7 @@ A tool failure does not necessarily mean the entire session failed.
 
 ---
 
-# 27. Sandbox Jobs
+## 27. Sandbox Jobs
 
 Sandbox executions should be associated with the session.
 
@@ -680,7 +682,7 @@ error
 
 ---
 
-# 28. Sandbox Isolation
+## 28. Sandbox Isolation
 
 Session state must not weaken sandbox isolation.
 
@@ -690,7 +692,7 @@ Do not expose the entire session directory to untrusted code.
 
 ---
 
-# 29. Session Workspace
+## 29. Session Workspace
 
 A session may have a dedicated workspace.
 
@@ -710,7 +712,7 @@ The exact physical layout is implementation-specific.
 
 ---
 
-# 30. Recommended Workspace
+## 30. Recommended Workspace
 
 Example:
 
@@ -735,7 +737,7 @@ Sandbox temporary files should remain outside this trusted workspace.
 
 ---
 
-# 31. Session Persistence
+## 31. Session Persistence
 
 A session should be persistable.
 
@@ -752,7 +754,7 @@ Transient processes do not need to survive restart.
 
 ---
 
-# 32. Session Serialization
+## 32. Session Serialization
 
 Recommended metadata format:
 
@@ -779,7 +781,7 @@ Example:
 
 ---
 
-# 33. Session Recovery
+## 33. Session Recovery
 
 When restoring a session:
 
@@ -794,7 +796,7 @@ Do not blindly assume persisted state is valid.
 
 ---
 
-# 34. Resuming Work
+## 34. Resuming Work
 
 A user should be able to continue:
 
@@ -825,13 +827,13 @@ No need to rerun source code.
 
 ---
 
-# 35. Minimal Recalculation Principle
+## 35. Minimal Recalculation Principle
 
 When the user requests a change, determine the earliest affected layer.
 
 Example:
 
-### Change color/style
+#### Change color/style
 
 ```text
 Theme
@@ -839,7 +841,7 @@ Theme
 Render again
 ```
 
-### Change animation pacing
+#### Change animation pacing
 
 ```text
 Animation IR
@@ -847,7 +849,7 @@ Animation IR
 Render again
 ```
 
-### Change visualization layout
+#### Change visualization layout
 
 ```text
 Visualization IR
@@ -857,7 +859,7 @@ Animation IR
 Render
 ```
 
-### Change sample input
+#### Change sample input
 
 ```text
 Trace IR
@@ -869,7 +871,7 @@ Animation IR
 Render
 ```
 
-### Change source algorithm
+#### Change source algorithm
 
 ```text
 Algorithm IR
@@ -883,7 +885,7 @@ Animation IR
 
 ---
 
-# 36. Revision Model
+## 36. Revision Model
 
 A session may contain multiple revisions.
 
@@ -911,7 +913,7 @@ Session
 
 ---
 
-# 37. Revision Record
+## 37. Revision Record
 
 Recommended record:
 
@@ -928,7 +930,7 @@ Recommended record:
 
 ---
 
-# 38. Rollback
+## 38. Rollback
 
 Because artifacts are versioned, rollback should be simple.
 
@@ -945,7 +947,7 @@ Do not require regeneration for rollback.
 
 ---
 
-# 39. Branching Revisions
+## 39. Branching Revisions
 
 Future implementations may allow branching:
 
@@ -961,7 +963,7 @@ Branch support is optional for MVP.
 
 ---
 
-# 40. Validation State
+## 40. Validation State
 
 Every IR artifact should record validation status.
 
@@ -986,7 +988,7 @@ Do not treat unvalidated IR as production-ready.
 
 ---
 
-# 41. Validation Reports
+## 41. Validation Reports
 
 Validation reports should be artifacts.
 
@@ -1001,7 +1003,7 @@ This makes validation failures inspectable.
 
 ---
 
-# 42. Error State
+## 42. Error State
 
 Errors belong to a stage or operation.
 
@@ -1024,11 +1026,11 @@ Example:
 }
 ```
 
-Detailed error behavior follows `EXCEPTION.md`.
+Detailed error behavior follows [ERROR_HANDLING.md](ERROR_HANDLING.md).
 
 ---
 
-# 43. Warning State
+## 43. Warning State
 
 Warnings should not fail the session.
 
@@ -1045,7 +1047,7 @@ Warnings should remain attached to the relevant artifact or stage.
 
 ---
 
-# 44. Partial Success
+## 44. Partial Success
 
 A session may be usable even when some operations fail.
 
@@ -1076,7 +1078,7 @@ with warnings.
 
 ---
 
-# 45. Cancellation
+## 45. Cancellation
 
 Users may cancel an active session operation.
 
@@ -1092,7 +1094,7 @@ Previously completed artifacts should remain available.
 
 ---
 
-# 46. Session Cancellation vs Tool Cancellation
+## 46. Session Cancellation vs Tool Cancellation
 
 Cancelling a tool does not necessarily cancel the entire session.
 
@@ -1112,7 +1114,7 @@ Trace IR
 
 ---
 
-# 47. Session Completion
+## 47. Session Completion
 
 A session may be considered completed when the user's requested output exists.
 
@@ -1128,7 +1130,7 @@ Completion depends on user intent.
 
 ---
 
-# 48. Session Reopening
+## 48. Session Reopening
 
 Completed sessions may be reopened for revision.
 
@@ -1146,7 +1148,7 @@ Do not require a completely new session for every small modification.
 
 ---
 
-# 49. Session Forking
+## 49. Session Forking
 
 A session may be forked.
 
@@ -1169,7 +1171,7 @@ Useful for:
 
 ---
 
-# 50. Session and Conversation
+## 50. Session and Conversation
 
 A conversation and a session are related but not identical.
 
@@ -1187,7 +1189,7 @@ The system should identify which session a user action applies to.
 
 ---
 
-# 51. Active Session
+## 51. Active Session
 
 There should normally be one active session per interaction context.
 
@@ -1207,7 +1209,7 @@ the instruction should apply to the active session.
 
 ---
 
-# 52. Ambiguous Session References
+## 52. Ambiguous Session References
 
 If multiple sessions exist and the target cannot be safely inferred, the caller should resolve the intended session.
 
@@ -1215,7 +1217,7 @@ Do not modify arbitrary sessions.
 
 ---
 
-# 53. Session Context Window
+## 53. Session Context Window
 
 Do not send the entire session history to the LLM on every call.
 
@@ -1236,7 +1238,7 @@ This reduces tokens and irrelevant context.
 
 ---
 
-# 54. Context Builder
+## 54. Context Builder
 
 Recommended component:
 
@@ -1254,7 +1256,7 @@ Responsibilities:
 
 ---
 
-# 55. Artifact Retrieval
+## 55. Artifact Retrieval
 
 Large artifacts should be retrieved on demand.
 
@@ -1270,7 +1272,7 @@ Do not automatically inject the entire trace.
 
 ---
 
-# 56. Trace Context
+## 56. Trace Context
 
 Large Trace IR may contain thousands of events.
 
@@ -1288,7 +1290,7 @@ The full trace remains available through tools.
 
 ---
 
-# 57. Session Memory Boundaries
+## 57. Session Memory Boundaries
 
 Session memory should contain project-specific working context.
 
@@ -1306,7 +1308,7 @@ It should not affect unrelated future sessions.
 
 ---
 
-# 58. Session Configuration
+## 58. Session Configuration
 
 A session may contain configuration.
 
@@ -1329,7 +1331,7 @@ Configuration should be separated from IR where appropriate.
 
 ---
 
-# 59. Default Configuration
+## 59. Default Configuration
 
 Global defaults may be inherited when the session is created.
 
@@ -1347,7 +1349,7 @@ Later layers override earlier ones.
 
 ---
 
-# 60. Configuration Snapshot
+## 60. Configuration Snapshot
 
 For reproducibility, the effective configuration used for generation should be recorded.
 
@@ -1355,7 +1357,7 @@ Do not rely only on current global configuration.
 
 ---
 
-# 61. Template Selection
+## 61. Template Selection
 
 The session should record:
 
@@ -1376,7 +1378,7 @@ Example:
 
 ---
 
-# 62. Model Metadata
+## 62. Model Metadata
 
 If an LLM participates in artifact generation, optionally record:
 
@@ -1393,7 +1395,7 @@ Do not store hidden model reasoning.
 
 ---
 
-# 63. Prompt Versioning
+## 63. Prompt Versioning
 
 Agent-generated structured artifacts should record the prompt/template version when useful.
 
@@ -1409,7 +1411,7 @@ This matters for reproducibility.
 
 ---
 
-# 64. Deterministic Tool Results
+## 64. Deterministic Tool Results
 
 Deterministic tool results should be reusable within the session.
 
@@ -1429,7 +1431,7 @@ Do not rerun expensive deterministic operations unnecessarily.
 
 ---
 
-# 65. Session Cache
+## 65. Session Cache
 
 A session may maintain local cache references.
 
@@ -1445,7 +1447,7 @@ Cache entries should not replace authoritative artifacts.
 
 ---
 
-# 66. Session Events
+## 66. Session Events
 
 The session may expose an internal event stream.
 
@@ -1472,7 +1474,7 @@ Useful for:
 
 ---
 
-# 67. Event Example
+## 67. Event Example
 
 ```json
 {
@@ -1485,7 +1487,7 @@ Useful for:
 
 ---
 
-# 68. Event Ordering
+## 68. Event Ordering
 
 Session events should have a monotonic sequence number.
 
@@ -1501,7 +1503,7 @@ Do not depend solely on wall-clock timestamps for ordering.
 
 ---
 
-# 69. Concurrency
+## 69. Concurrency
 
 A session may have parallel operations.
 
@@ -1517,7 +1519,7 @@ However, operations that modify the same active artifact must be coordinated.
 
 ---
 
-# 70. Optimistic Revision Control
+## 70. Optimistic Revision Control
 
 Artifact updates may include expected version information.
 
@@ -1534,7 +1536,7 @@ This prevents concurrent modifications from silently overwriting each other.
 
 ---
 
-# 71. Session Locking
+## 71. Session Locking
 
 Avoid locking an entire session for long-running work.
 
@@ -1548,7 +1550,7 @@ For example:
 
 ---
 
-# 72. Session Storage Interface
+## 72. Session Storage Interface
 
 Recommended abstraction:
 
@@ -1578,7 +1580,7 @@ The Agent should not depend on a specific backend.
 
 ---
 
-# 73. Artifact Store Interface
+## 73. Artifact Store Interface
 
 Recommended:
 
@@ -1596,7 +1598,7 @@ Large binary files should not be stored directly inside session metadata.
 
 ---
 
-# 74. MVP Storage
+## 74. MVP Storage
 
 For an initial local application, use:
 
@@ -1619,7 +1621,7 @@ A database can be added later.
 
 ---
 
-# 75. SQLite Option
+## 75. SQLite Option
 
 For more structured local persistence:
 
@@ -1641,7 +1643,7 @@ Large files may remain on disk.
 
 ---
 
-# 76. Cleanup Policy
+## 76. Cleanup Policy
 
 Sessions may generate significant temporary data.
 
@@ -1670,7 +1672,7 @@ They may be cleaned automatically.
 
 ---
 
-# 77. Persistent Artifacts
+## 77. Persistent Artifacts
 
 Recommended persistent artifacts:
 
@@ -1688,7 +1690,7 @@ Retention policy may be configurable.
 
 ---
 
-# 78. Session Deletion
+## 78. Session Deletion
 
 Deleting a session should remove:
 
@@ -1702,7 +1704,7 @@ Shared immutable cached artifacts should use reference counting or independent o
 
 ---
 
-# 79. Security
+## 79. Security
 
 Session metadata must never store secrets unnecessarily.
 
@@ -1718,7 +1720,7 @@ Session IDs should not themselves contain sensitive data.
 
 ---
 
-# 80. User Source Code
+## 80. User Source Code
 
 Source code may be sensitive.
 
@@ -1734,7 +1736,7 @@ At minimum, avoid unnecessary logging duplication.
 
 ---
 
-# 81. Export References
+## 81. Export References
 
 Exports should be associated with the exact Animation IR version.
 
@@ -1750,7 +1752,7 @@ Do not lose this relationship.
 
 ---
 
-# 82. Preview References
+## 82. Preview References
 
 A preview should also record:
 
@@ -1764,7 +1766,7 @@ This makes screenshots and previews reproducible.
 
 ---
 
-# 83. Theme Changes
+## 83. Theme Changes
 
 A visual style change may not require semantic regeneration.
 
@@ -1780,7 +1782,7 @@ The session should preserve reusable Animation IR where possible.
 
 ---
 
-# 84. Session Summary
+## 84. Session Summary
 
 A session should be able to produce a compact summary.
 
@@ -1814,7 +1816,7 @@ Useful for Agent context and UI display.
 
 ---
 
-# 85. Debug Summary
+## 85. Debug Summary
 
 Developer-facing summaries may additionally include:
 
@@ -1829,7 +1831,7 @@ timings
 
 ---
 
-# 86. Provenance
+## 86. Provenance
 
 Each generated artifact should make its provenance inspectable.
 
@@ -1854,7 +1856,7 @@ yes
 
 ---
 
-# 87. Session Reproducibility
+## 87. Session Reproducibility
 
 To reproduce a session, the system should ideally preserve:
 
@@ -1877,7 +1879,7 @@ Deterministic portions should remain reproducible.
 
 ---
 
-# 88. Failure Recovery
+## 88. Failure Recovery
 
 If a session stops unexpectedly:
 
@@ -1901,7 +1903,7 @@ Do not regenerate earlier valid stages unnecessarily.
 
 ---
 
-# 89. Stage Checkpointing
+## 89. Stage Checkpointing
 
 Persist session state after meaningful stages.
 
@@ -1919,7 +1921,7 @@ Avoid persisting only at the very end.
 
 ---
 
-# 90. Transactional Updates
+## 90. Transactional Updates
 
 When possible:
 
@@ -1937,7 +1939,7 @@ Do not activate partially written artifacts.
 
 ---
 
-# 91. Atomic Activation
+## 91. Atomic Activation
 
 Changing the active artifact should be atomic.
 
@@ -1952,7 +1954,7 @@ Readers should never see an incomplete transition.
 
 ---
 
-# 92. Invalid Artifacts
+## 92. Invalid Artifacts
 
 Invalid artifacts may be retained for debugging.
 
@@ -1973,7 +1975,7 @@ animation_v3
 
 ---
 
-# 93. Agent Repair
+## 93. Agent Repair
 
 When validation fails:
 
@@ -1995,7 +1997,7 @@ It may be useful for debugging.
 
 ---
 
-# 94. Example Full Session
+## 94. Example Full Session
 
 ```text
 Create Session
@@ -2045,7 +2047,7 @@ Completed
 
 ---
 
-# 95. Example Session JSON
+## 95. Example Session JSON
 
 ```json
 {
@@ -2073,7 +2075,7 @@ Completed
 
 ---
 
-# 96. Rust Model Example
+## 96. Rust Model Example
 
 A possible Rust model:
 
@@ -2128,7 +2130,7 @@ pub enum SessionStage {
 
 ---
 
-# 97. Recommended Modules
+## 97. Recommended Modules
 
 ```text
 src/
@@ -2167,9 +2169,9 @@ context.rs
 
 ---
 
-# 98. Relationship with ARCHITECTURE.md
+## 98. Relationship with ARCHITECTURE.md
 
-`ARCHITECTURE.md` defines:
+[Architecture](ARCHITECTURE.md) defines:
 
 > What system components exist.
 
@@ -2179,9 +2181,9 @@ context.rs
 
 ---
 
-# 99. Relationship with IR.md
+## 99. Relationship with IR.md
 
-`IR.md` defines:
+[IR](IR.md) defines:
 
 > What Algorithm / Trace / Visualization / Animation data look like.
 
@@ -2191,7 +2193,7 @@ context.rs
 
 ---
 
-# 100. Relationship with TOOLS.md
+## 100. Relationship with TOOLS.md
 
 `TOOLS.md` defines:
 
@@ -2203,7 +2205,7 @@ context.rs
 
 ---
 
-# 101. Relationship with SANDBOX.md
+## 101. Relationship with SANDBOX.md
 
 `SANDBOX.md` defines:
 
@@ -2220,9 +2222,9 @@ produced which Trace IR
 
 ---
 
-# 102. Relationship with EXCEPTION.md
+## 102. Relationship with ERROR_HANDLING.md
 
-`EXCEPTION.md` defines error behavior.
+[ERROR_HANDLING.md](ERROR_HANDLING.md) defines error behavior.
 
 `SESSION.md` records:
 
@@ -2235,7 +2237,7 @@ whether the session can continue
 
 ---
 
-# 103. MVP Session Model
+## 103. MVP Session Model
 
 For the first version, a session only needs:
 
@@ -2262,7 +2264,7 @@ Do not build a complex distributed session system before the core pipeline works
 
 ---
 
-# 104. MVP Persistence
+## 104. MVP Persistence
 
 Recommended MVP:
 
@@ -2293,7 +2295,7 @@ This is sufficient for initial development.
 
 ---
 
-# 105. Future Extensions
+## 105. Future Extensions
 
 Future versions may add:
 
@@ -2314,7 +2316,7 @@ These should extend the model without changing its basic principles.
 
 ---
 
-# 106. Core Session Principle
+## 106. Core Session Principle
 
 A session should make it possible to answer:
 
@@ -2344,7 +2346,7 @@ If the system cannot answer these questions, the session model is insufficient.
 
 ---
 
-# 107. Final Principle
+## 107. Final Principle
 
 Do not treat an Agent session as:
 

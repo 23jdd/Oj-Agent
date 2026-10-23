@@ -1,5 +1,7 @@
 # Usage and implementation
 
+[文档索引 / Documentation index](README.md)
+
 ## Desktop
 
 Run `cargo run`, open **模型设置**, and configure a provider, model ID and API key. Start a conversation, attach files with `@`, and send with **Ctrl+Enter** or **发送**. The model may answer in Markdown without producing animation. Generated animations appear as registered application-local links; click one to enter its native playback page and use **返回对话** to return. No browser or web server is used. See [chat, attachments and verification](CHAT.md).

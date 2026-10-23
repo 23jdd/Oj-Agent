@@ -1,6 +1,37 @@
-# IR.md
+# Intermediate representations / 中间表示
 
-# Intermediate Representation Specification
+[文档索引 / Documentation index](../README.md)
+
+> Scope / 阅读范围：This reference separates algorithm, trace, visualization and animation responsibilities. The current version-2 structured extension is presented first; earlier sections include conceptual schema examples. The implemented types and validation live in [src/ir.rs](../../src/ir.rs), and structured observations in [oj-sandbox](../../crates/oj-sandbox/src/lib.rs).
+
+## Structured animation extension (version 2, backward compatible)
+
+The chat animation compiler can now emit non-array visual structures without
+creating a second animation system. Existing `values`, `indices`, `edges`,
+`directed`, `text` and action fields remain valid; all new fields are optional
+and default to empty.
+
+`SceneObject` and `AnimationAction` may carry:
+
+- `labels`, `states`: per-node or per-cell display labels and semantic states
+  (`normal`, `active`/`current`/`visiting`, `done`/`visited`/`success`,
+  `error`, `hidden`, `empty`).
+- `positions`: normalized `[x, y]` coordinates in `0..1` for graph nodes.
+- `edges`, `edge_labels`, `directed`: node or grid-cell connections; indices
+  refer to the object's values in row-major grid order.
+- `pointers`: a pointer name and target index. For arrays the target is a value
+  index; for trees/graphs/linked lists it is a node index; for grids it is a
+  row-major cell index.
+- `parents`: optional explicit parent indices for tree consumers.
+- `rows`, `cols`: required for `grid` objects, with
+  `rows * cols == values.len()`.
+
+`AnimationAction::UpdateValue` carries a full `structure` snapshot when
+connectivity, labels, states, positions or pointers change. The timeline
+compiles structure keyframes alongside value keyframes, so seeking remains
+deterministic. `tree`, `graph`, `linked-list` and `grid` object kinds are
+rendered by the existing Skia renderer; values-only objects still use the
+array/table/stack/queue layouts.
 
 ## 1. Purpose
 
@@ -45,7 +76,7 @@ The goal is to make generation:
 
 ---
 
-# 2. IR Layers
+## 2. IR Layers
 
 The system uses four main IR layers.
 
@@ -67,11 +98,11 @@ These layers must remain separate.
 
 ---
 
-# 3. Core Rule
+## 3. Core Rule
 
 Each IR should answer exactly one category of question.
 
-## Algorithm IR
+### Algorithm IR
 
 Answers:
 
@@ -79,7 +110,7 @@ Answers:
 
 ---
 
-## Trace IR
+### Trace IR
 
 Answers:
 
@@ -87,7 +118,7 @@ Answers:
 
 ---
 
-## Visualization IR
+### Visualization IR
 
 Answers:
 
@@ -95,7 +126,7 @@ Answers:
 
 ---
 
-## Animation IR
+### Animation IR
 
 Answers:
 
@@ -103,7 +134,7 @@ Answers:
 
 ---
 
-# 4. Dependency Direction
+## 4. Dependency Direction
 
 IR dependencies must flow in one direction.
 
@@ -137,7 +168,7 @@ is forbidden.
 
 ---
 
-# 5. Shared IR Header
+## 5. Shared IR Header
 
 Every serialized IR document should contain a common header.
 
@@ -173,7 +204,7 @@ generation_id
 
 ---
 
-# 6. Stable IDs
+## 6. Stable IDs
 
 All significant entities should use stable IDs.
 
@@ -210,7 +241,7 @@ unless objects are generated dynamically and no semantic name exists.
 
 ---
 
-# 7. Algorithm IR
+## 7. Algorithm IR
 
 Algorithm IR describes the algorithm at a semantic level.
 
@@ -239,7 +270,7 @@ Example:
 
 ---
 
-# 8. Algorithm Entities
+## 8. Algorithm Entities
 
 An entity represents a meaningful algorithm object.
 
@@ -291,7 +322,7 @@ Another:
 
 ---
 
-# 9. Entity Roles
+## 9. Entity Roles
 
 Recommended entity roles:
 
@@ -311,7 +342,7 @@ These help visualization planning.
 
 ---
 
-# 10. Algorithm Phases
+## 10. Algorithm Phases
 
 Algorithms may be divided into semantic phases.
 
@@ -348,7 +379,7 @@ Finish
 
 ---
 
-# 11. Algorithm Operations
+## 11. Algorithm Operations
 
 Operations describe semantic behavior.
 
@@ -393,7 +424,7 @@ Example:
 
 ---
 
-# 12. Algorithm Relations
+## 12. Algorithm Relations
 
 Relations describe connections between entities.
 
@@ -422,7 +453,7 @@ derived-from
 
 ---
 
-# 13. Algorithm IR Example
+## 13. Algorithm IR Example
 
 Example for two-sum:
 
@@ -488,7 +519,7 @@ Example for two-sum:
 
 ---
 
-# 14. Trace IR
+## 14. Trace IR
 
 Trace IR represents one concrete execution.
 
@@ -504,7 +535,7 @@ Trace IR must be concrete.
 
 ---
 
-# 15. Trace Structure
+## 15. Trace Structure
 
 Recommended structure:
 
@@ -531,7 +562,7 @@ Example:
 
 ---
 
-# 16. Trace Events
+## 16. Trace Events
 
 Each event should contain:
 
@@ -562,7 +593,7 @@ Example:
 
 ---
 
-# 17. Trace Sequence
+## 17. Trace Sequence
 
 Trace events should use deterministic ordering.
 
@@ -581,7 +612,7 @@ Timestamps may be optional metadata.
 
 ---
 
-# 18. State Snapshots
+## 18. State Snapshots
 
 Trace events may contain state deltas.
 
@@ -606,7 +637,7 @@ However, periodic snapshots may be used for:
 
 ---
 
-# 19. Trace Event Taxonomy
+## 19. Trace Event Taxonomy
 
 Recommended trace events:
 
@@ -655,7 +686,7 @@ The taxonomy should remain relatively small.
 
 ---
 
-# 20. Trace Payloads
+## 20. Trace Payloads
 
 Payload format depends on event kind.
 
@@ -681,7 +712,7 @@ Example comparison:
 
 ---
 
-# 21. Source Mapping
+## 21. Source Mapping
 
 Trace events may reference source code.
 
@@ -709,7 +740,7 @@ This enables synchronized code highlighting.
 
 ---
 
-# 22. Trace Confidence
+## 22. Trace Confidence
 
 A trace should indicate its origin.
 
@@ -745,7 +776,7 @@ Never treat AI-inferred execution as runtime-verified execution.
 
 ---
 
-# 23. Trace IR Example
+## 23. Trace IR Example
 
 ```json
 {
@@ -815,7 +846,7 @@ Never treat AI-inferred execution as runtime-verified execution.
 
 ---
 
-# 24. Visualization IR
+## 24. Visualization IR
 
 Visualization IR maps algorithm semantics into visual semantics.
 
@@ -837,7 +868,7 @@ Visualization IR does not contain frame-level animation.
 
 ---
 
-# 25. Visualization IR Responsibilities
+## 25. Visualization IR Responsibilities
 
 Visualization IR decides:
 
@@ -854,7 +885,7 @@ It should not decide precise per-frame interpolation.
 
 ---
 
-# 26. Visual Components
+## 26. Visual Components
 
 Recommended semantic components:
 
@@ -891,7 +922,7 @@ LegendView
 
 ---
 
-# 27. Visualization Object
+## 27. Visualization Object
 
 Example:
 
@@ -916,7 +947,7 @@ Another:
 
 ---
 
-# 28. Binding
+## 28. Binding
 
 Visualization components should bind to semantic entities.
 
@@ -943,7 +974,7 @@ visited-state
 
 ---
 
-# 29. Layout Relations
+## 29. Layout Relations
 
 Visualization IR should express relative layout.
 
@@ -971,7 +1002,7 @@ Absolute coordinates belong later in layout compilation.
 
 ---
 
-# 30. Layout Primitives
+## 30. Layout Primitives
 
 Useful layout relations:
 
@@ -1006,7 +1037,7 @@ Example:
 
 ---
 
-# 31. Visual State
+## 31. Visual State
 
 Visual objects may define semantic states.
 
@@ -1049,7 +1080,7 @@ unless the visual effect specifically requires a raw value.
 
 ---
 
-# 32. Event Mapping
+## 32. Event Mapping
 
 Visualization IR can map Trace IR events to visual reactions.
 
@@ -1075,7 +1106,7 @@ Another:
 
 ---
 
-# 33. Explanations
+## 33. Explanations
 
 Visualization IR may contain narration or explanation text.
 
@@ -1095,7 +1126,7 @@ Animation timing determines when they appear.
 
 ---
 
-# 34. Visualization Scene
+## 34. Visualization Scene
 
 A visualization may contain multiple conceptual scenes.
 
@@ -1135,7 +1166,7 @@ Recommended representation:
 
 ---
 
-# 35. Visualization IR Example
+## 35. Visualization IR Example
 
 ```json
 {
@@ -1194,7 +1225,7 @@ Recommended representation:
 
 ---
 
-# 36. Animation IR
+## 36. Animation IR
 
 Animation IR describes concrete visual changes over time.
 
@@ -1211,7 +1242,7 @@ It should be:
 
 ---
 
-# 37. Animation IR Structure
+## 37. Animation IR Structure
 
 Recommended structure:
 
@@ -1236,7 +1267,7 @@ Example:
 
 ---
 
-# 38. Scene Graph
+## 38. Scene Graph
 
 Scene graph objects represent renderable objects.
 
@@ -1272,7 +1303,7 @@ Otherwise they can be compiled into primitives.
 
 ---
 
-# 39. Visual Object Properties
+## 39. Visual Object Properties
 
 Common properties:
 
@@ -1307,7 +1338,7 @@ Example:
 
 ---
 
-# 40. Timeline
+## 40. Timeline
 
 Animation IR uses a timeline.
 
@@ -1326,7 +1357,7 @@ Events should remain deterministic.
 
 ---
 
-# 41. Core Animation Actions
+## 41. Core Animation Actions
 
 Recommended primitive actions:
 
@@ -1370,7 +1401,7 @@ Avoid adding extremely specialized actions unless necessary.
 
 ---
 
-# 42. Animation Composition
+## 42. Animation Composition
 
 Complex animation should be composed.
 
@@ -1404,7 +1435,7 @@ Representation:
 
 ---
 
-# 43. Timing
+## 43. Timing
 
 Time is expressed in seconds.
 
@@ -1428,7 +1459,7 @@ duration >= 0
 
 ---
 
-# 44. Easing
+## 44. Easing
 
 Animation actions may specify easing.
 
@@ -1451,7 +1482,7 @@ Avoid renderer-specific easing identifiers.
 
 ---
 
-# 45. Parallel Actions
+## 45. Parallel Actions
 
 Example:
 
@@ -1475,7 +1506,7 @@ Parallel actions start together.
 
 ---
 
-# 46. Sequence Actions
+## 46. Sequence Actions
 
 Example:
 
@@ -1501,7 +1532,7 @@ Example:
 
 ---
 
-# 47. Style References
+## 47. Style References
 
 Animation IR should reference theme styles whenever possible.
 
@@ -1525,7 +1556,7 @@ This keeps Animation IR independent from visual themes.
 
 ---
 
-# 48. Camera
+## 48. Camera
 
 Optional camera state:
 
@@ -1558,7 +1589,7 @@ Example:
 
 ---
 
-# 49. Code Highlighting
+## 49. Code Highlighting
 
 Animation IR may include code-related objects.
 
@@ -1576,7 +1607,7 @@ This should originate from Trace IR source mapping.
 
 ---
 
-# 50. Animation IR Example
+## 50. Animation IR Example
 
 ```json
 {
@@ -1631,7 +1662,7 @@ This should originate from Trace IR source mapping.
 
 ---
 
-# 51. IR Compilation
+## 51. IR Compilation
 
 IR conversion should happen through explicit compiler stages.
 
@@ -1657,7 +1688,7 @@ Each compiler should have clear inputs and outputs.
 
 ---
 
-# 52. Validation
+## 52. Validation
 
 Every IR layer must be validated.
 
@@ -1679,7 +1710,7 @@ Do not delay validation until rendering.
 
 ---
 
-# 53. Algorithm IR Validation
+## 53. Algorithm IR Validation
 
 Check:
 
@@ -1693,7 +1724,7 @@ valid relations
 
 ---
 
-# 54. Trace IR Validation
+## 54. Trace IR Validation
 
 Check:
 
@@ -1708,7 +1739,7 @@ valid source mapping
 
 ---
 
-# 55. Visualization IR Validation
+## 55. Visualization IR Validation
 
 Check:
 
@@ -1722,7 +1753,7 @@ valid scene references
 
 ---
 
-# 56. Animation IR Validation
+## 56. Animation IR Validation
 
 Check:
 
@@ -1738,7 +1769,7 @@ finite numeric values
 
 ---
 
-# 57. IR Versioning
+## 57. IR Versioning
 
 Every IR format must use explicit versioning.
 
@@ -1755,7 +1786,7 @@ Breaking schema changes require a version change.
 
 ---
 
-# 58. Migration
+## 58. Migration
 
 If serialized IR must survive between versions, provide migration.
 
@@ -1773,7 +1804,7 @@ Do not silently reinterpret old data.
 
 ---
 
-# 59. Serialization
+## 59. Serialization
 
 Default serialization format:
 
@@ -1792,7 +1823,7 @@ Binary formats may be added later for performance.
 
 ---
 
-# 60. Optional Binary Representation
+## 60. Optional Binary Representation
 
 If Animation IR becomes large, internal representation may use:
 
@@ -1807,7 +1838,7 @@ However, JSON should remain available for debugging and interchange.
 
 ---
 
-# 61. Canonical Serialization
+## 61. Canonical Serialization
 
 For testing and caching, serialized IR should use stable ordering when possible.
 
@@ -1822,7 +1853,7 @@ clean diffs
 
 ---
 
-# 62. Debug Artifacts
+## 62. Debug Artifacts
 
 Each generation run may emit:
 
@@ -1838,7 +1869,7 @@ These files make pipeline failures easy to inspect.
 
 ---
 
-# 63. Caching
+## 63. Caching
 
 IRs are natural cache boundaries.
 
@@ -1866,7 +1897,7 @@ If only rendering style changes, previous semantic IRs should remain reusable.
 
 ---
 
-# 64. Hashing
+## 64. Hashing
 
 IR cache keys may include:
 
@@ -1881,7 +1912,7 @@ configuration hash
 
 ---
 
-# 65. Determinism
+## 65. Determinism
 
 Whenever deterministic output is possible, prefer it.
 
@@ -1899,7 +1930,7 @@ Visualization planning may be AI-generated, but its output becomes deterministic
 
 ---
 
-# 66. AI Boundaries
+## 66. AI Boundaries
 
 AI may generate:
 
@@ -1923,7 +1954,7 @@ Animation IR may be AI-assisted but should preferably be generated by a determin
 
 ---
 
-# 67. Preferred Generation Model
+## 67. Preferred Generation Model
 
 Recommended pipeline:
 
@@ -1949,7 +1980,7 @@ This keeps the model away from low-level animation details.
 
 ---
 
-# 68. Templates
+## 68. Templates
 
 Visualization templates should operate on semantic IR.
 
@@ -1974,7 +2005,7 @@ annotation strategy
 
 ---
 
-# 69. Generic Fallback
+## 69. Generic Fallback
 
 When no specialized visualization exists:
 
@@ -2000,7 +2031,7 @@ This ensures unsupported algorithms can still be visualized.
 
 ---
 
-# 70. Example: Binary Search
+## 70. Example: Binary Search
 
 Algorithm IR:
 
@@ -2049,7 +2080,7 @@ Each layer becomes more visual and less semantic.
 
 ---
 
-# 71. Example: BFS
+## 71. Example: BFS
 
 Algorithm IR:
 
@@ -2090,7 +2121,7 @@ Highlight edge A-B
 
 ---
 
-# 72. Example: Dynamic Programming
+## 72. Example: Dynamic Programming
 
 Algorithm IR:
 
@@ -2128,7 +2159,7 @@ Update dp[2]
 
 ---
 
-# 73. Expression IR
+## 73. Expression IR
 
 Expressions may use a small structured format.
 
@@ -2163,7 +2194,7 @@ Raw display text may still be included.
 
 ---
 
-# 74. Value Types
+## 74. Value Types
 
 Common values:
 
@@ -2189,7 +2220,7 @@ Values must remain serializable.
 
 ---
 
-# 75. References
+## 75. References
 
 Object references should use IDs.
 
@@ -2205,7 +2236,7 @@ Do not duplicate entire objects when a reference is sufficient.
 
 ---
 
-# 76. Extensibility
+## 76. Extensibility
 
 Every IR should allow optional extension fields.
 
@@ -2223,7 +2254,7 @@ Core renderers should ignore unknown optional extensions where safe.
 
 ---
 
-# 77. Unknown Fields
+## 77. Unknown Fields
 
 Readers should preferably tolerate unknown optional fields.
 
@@ -2235,7 +2266,7 @@ Readers must reject:
 
 ---
 
-# 78. Renderer Independence
+## 78. Renderer Independence
 
 Animation IR must not assume a specific backend such as:
 
@@ -2267,7 +2298,7 @@ TextStyle
 
 ---
 
-# 79. Language Independence
+## 79. Language Independence
 
 Algorithm IR and Trace IR must not depend on one source language.
 
@@ -2299,7 +2330,7 @@ Source-specific metadata may be attached separately.
 
 ---
 
-# 80. No Presentation Leakage
+## 80. No Presentation Leakage
 
 Algorithm IR should never contain:
 
@@ -2327,7 +2358,7 @@ Animation IR is the correct layer for concrete presentation behavior.
 
 ---
 
-# 81. No Execution Leakage
+## 81. No Execution Leakage
 
 Visualization IR should not invent runtime events.
 
@@ -2337,7 +2368,7 @@ Visual state and algorithm state are separate.
 
 ---
 
-# 82. Round-Trip Debugging
+## 82. Round-Trip Debugging
 
 Developers should be able to inspect every stage independently.
 
@@ -2377,7 +2408,7 @@ This is the primary debugging strategy.
 
 ---
 
-# 83. Testing Strategy
+## 83. Testing Strategy
 
 Each compiler boundary should have tests.
 
@@ -2395,7 +2426,7 @@ Use snapshot tests where appropriate.
 
 ---
 
-# 84. Golden Tests
+## 84. Golden Tests
 
 Maintain small canonical examples.
 
@@ -2427,7 +2458,7 @@ tests/golden/two_sum/
 
 ---
 
-# 85. Minimal IR Philosophy
+## 85. Minimal IR Philosophy
 
 Do not make the IR more complex than necessary.
 
@@ -2455,7 +2486,7 @@ Parallel
 
 ---
 
-# 86. Semantic First
+## 86. Semantic First
 
 Prefer semantic descriptions over visual tricks.
 
@@ -2487,7 +2518,7 @@ Semantic information survives layout and theme changes.
 
 ---
 
-# 87. IR Ownership
+## 87. IR Ownership
 
 Recommended ownership:
 
@@ -2512,7 +2543,7 @@ No single module should own every representation.
 
 ---
 
-# 88. Error Handling
+## 88. Error Handling
 
 Invalid IR must return structured validation errors.
 
@@ -2529,11 +2560,11 @@ IRValidationError {
 
 The original IR should be preserved for debugging where safe.
 
-Detailed error handling follows `EXCEPTION.md`.
+Detailed error handling follows [ERROR_HANDLING.md](ERROR_HANDLING.md).
 
 ---
 
-# 89. Recommended Repository Structure
+## 89. Recommended Repository Structure
 
 ```text
 src/
@@ -2567,7 +2598,7 @@ src/
 
 ---
 
-# 90. Recommended Rust Shape
+## 90. Recommended Rust Shape
 
 Conceptually:
 
@@ -2601,11 +2632,11 @@ This document defines architecture, not a frozen Rust API.
 
 ---
 
-# 91. MVP Recommendation
+## 91. MVP Recommendation
 
 For the first version, keep the IR intentionally small.
 
-## Algorithm IR
+### Algorithm IR
 
 Support:
 
@@ -2621,7 +2652,7 @@ Table
 Pointer
 ```
 
-## Trace IR
+### Trace IR
 
 Support:
 
@@ -2641,7 +2672,7 @@ Branch
 Return
 ```
 
-## Visualization IR
+### Visualization IR
 
 Support:
 
@@ -2658,7 +2689,7 @@ TextView
 CodeView
 ```
 
-## Animation IR
+### Animation IR
 
 Support:
 
@@ -2681,7 +2712,7 @@ Do not attempt to support every possible algorithm in v1.
 
 ---
 
-# 92. Evolution Strategy
+## 92. Evolution Strategy
 
 Add new concepts only when a real visualization requires them.
 
@@ -2708,7 +2739,7 @@ This keeps the system manageable.
 
 ---
 
-# 93. Final Architecture
+## 93. Final Architecture
 
 The intended system is:
 
@@ -2743,7 +2774,7 @@ Source Code ─────→ Runtime / Instrumentation
 
 ---
 
-# 94. Final Principle
+## 94. Final Principle
 
 The IR system exists to prevent this:
 
@@ -2786,32 +2817,3 @@ without guessing.
 That separation is the primary purpose of the IR architecture.
 
 ---
-
-# Structured animation extension (version 2, backward compatible)
-
-The chat animation compiler can now emit non-array visual structures without
-creating a second animation system. Existing `values`, `indices`, `edges`,
-`directed`, `text` and action fields remain valid; all new fields are optional
-and default to empty.
-
-`SceneObject` and `AnimationAction` may carry:
-
-- `labels`, `states`: per-node or per-cell display labels and semantic states
-  (`normal`, `active`/`current`/`visiting`, `done`/`visited`/`success`,
-  `error`, `hidden`, `empty`).
-- `positions`: normalized `[x, y]` coordinates in `0..1` for graph nodes.
-- `edges`, `edge_labels`, `directed`: node or grid-cell connections; indices
-  refer to the object's values in row-major grid order.
-- `pointers`: a pointer name and target index. For arrays the target is a value
-  index; for trees/graphs/linked lists it is a node index; for grids it is a
-  row-major cell index.
-- `parents`: optional explicit parent indices for tree consumers.
-- `rows`, `cols`: required for `grid` objects, with
-  `rows * cols == values.len()`.
-
-`AnimationAction::UpdateValue` carries a full `structure` snapshot when
-connectivity, labels, states, positions or pointers change. The timeline
-compiles structure keyframes alongside value keyframes, so seeking remains
-deterministic. `tree`, `graph`, `linked-list` and `grid` object kinds are
-rendered by the existing Skia renderer; values-only objects still use the
-array/table/stack/queue layouts.

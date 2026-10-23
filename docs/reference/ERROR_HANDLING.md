@@ -1,6 +1,8 @@
-# EXCEPTION.md
+# Error handling / 错误处理
 
-# Error and Exception Handling
+[文档索引 / Documentation index](../README.md)
+
+> Scope / 阅读范围：This document defines error classification and recovery requirements. Concrete error fields are implemented in [src/error.rs](../../src/error.rs); configurable model retry behavior is documented in [Chat](../CHAT.md#request-settings--请求配置). Names and JSON snippets below include design examples, not a complete runtime error-code catalogue.
 
 ## 1. Purpose
 
@@ -22,7 +24,7 @@ Errors must retain enough context to identify which stage failed and why.
 
 ---
 
-# 2. Core Principle
+## 2. Core Principle
 
 Errors should be:
 
@@ -43,7 +45,7 @@ Something went wrong.
 
 ---
 
-# 3. Error Model
+## 3. Error Model
 
 All application errors should share a common structure.
 
@@ -75,7 +77,7 @@ Example:
 
 ---
 
-# 4. Error Categories
+## 4. Error Categories
 
 Use stable categories.
 
@@ -102,7 +104,7 @@ Do not create a unique error category for every individual failure.
 
 ---
 
-# 5. Stage Information
+## 5. Stage Information
 
 Every pipeline error should identify its stage.
 
@@ -138,7 +140,7 @@ This makes failures easy to diagnose.
 
 ---
 
-# 6. Error Codes
+## 6. Error Codes
 
 Errors should use stable machine-readable codes.
 
@@ -187,11 +189,11 @@ Codes should remain stable even if human-readable messages change.
 
 ---
 
-# 7. User Errors vs System Errors
+## 7. User Errors vs System Errors
 
 Errors should be separated into:
 
-## User-caused
+### User-caused
 
 Examples:
 
@@ -213,7 +215,7 @@ Check the syntax or select the correct language.
 
 ---
 
-## System-caused
+### System-caused
 
 Examples:
 
@@ -228,7 +230,7 @@ These should preserve debugging information internally while presenting a concis
 
 ---
 
-# 8. AI Output Errors
+## 8. AI Output Errors
 
 LLM output must never be assumed valid.
 
@@ -268,7 +270,7 @@ Use   Repair
 
 ---
 
-# 9. AI Repair Strategy
+## 9. AI Repair Strategy
 
 If structured AI output is invalid:
 
@@ -290,7 +292,7 @@ After repair attempts are exhausted, return an explicit Agent error.
 
 ---
 
-# 10. LLM Retry Rules
+## 10. LLM Retry Rules
 
 Retry only failures that may be temporary.
 
@@ -318,7 +320,7 @@ Schema validation should use the repair flow instead.
 
 ---
 
-# 11. Retry Policy
+## 11. Retry Policy
 
 Use bounded retries.
 
@@ -348,7 +350,7 @@ Use exponential backoff where appropriate.
 
 ---
 
-# 12. Timeout
+## 12. Timeout
 
 Every external or potentially unbounded operation should have a timeout.
 
@@ -379,7 +381,7 @@ EXECUTION_FAILED
 
 ---
 
-# 13. Code Execution Safety
+## 13. Code Execution Safety
 
 OJ source code must be treated as untrusted.
 
@@ -401,7 +403,7 @@ Never execute arbitrary submitted code directly in the main application process.
 
 ---
 
-# 14. Compile Errors
+## 14. Compile Errors
 
 Compile failures should preserve compiler output.
 
@@ -419,7 +421,7 @@ User-facing message should include useful compiler diagnostics when appropriate.
 
 ---
 
-# 15. Runtime Errors
+## 15. Runtime Errors
 
 Runtime failures include:
 
@@ -450,7 +452,7 @@ source_location?
 
 ---
 
-# 16. Execution Output Limits
+## 16. Execution Output Limits
 
 Execution must limit:
 
@@ -474,7 +476,7 @@ This prevents infinite loops or huge traces from exhausting memory.
 
 ---
 
-# 17. Trace Validation Errors
+## 17. Trace Validation Errors
 
 Trace events must be validated before visualization.
 
@@ -493,7 +495,7 @@ Do not pass invalid traces into visualization.
 
 ---
 
-# 18. Trace Recovery
+## 18. Trace Recovery
 
 Some trace errors may be recoverable.
 
@@ -519,7 +521,7 @@ unless the trace explicitly represents an algorithm error.
 
 ---
 
-# 19. Visualization Errors
+## 19. Visualization Errors
 
 Visualization planning errors include:
 
@@ -542,7 +544,7 @@ Generic Event Visualization
 
 ---
 
-# 20. Visualization Fallback
+## 20. Visualization Fallback
 
 When specialized visualization is unavailable:
 
@@ -560,7 +562,7 @@ The system should prefer degraded output over total failure when meaningful outp
 
 ---
 
-# 21. Animation Validation
+## 21. Animation Validation
 
 Before rendering, validate:
 
@@ -579,7 +581,7 @@ Never allow malformed animation data to reach the renderer.
 
 ---
 
-# 22. Invalid Duration
+## 22. Invalid Duration
 
 Invalid:
 
@@ -595,7 +597,7 @@ Zero duration may be allowed only for instantaneous state updates.
 
 ---
 
-# 23. Object Lifecycle Errors
+## 23. Object Lifecycle Errors
 
 Example invalid sequence:
 
@@ -622,7 +624,7 @@ should fail unless replacement semantics are explicitly supported.
 
 ---
 
-# 24. Renderer Errors
+## 24. Renderer Errors
 
 Rendering errors should not affect algorithm or trace state.
 
@@ -648,7 +650,7 @@ Fallback Font
 
 ---
 
-# 25. Renderer Fallback
+## 25. Renderer Fallback
 
 If GPU rendering fails and a software renderer exists:
 
@@ -664,7 +666,7 @@ Do not silently change renderers without recording the event.
 
 ---
 
-# 26. Export Errors
+## 26. Export Errors
 
 Export can fail independently from preview.
 
@@ -684,7 +686,7 @@ The user should still be able to preview or save the Animation IR.
 
 ---
 
-# 27. Partial Success
+## 27. Partial Success
 
 The system should support partial success.
 
@@ -709,7 +711,7 @@ Do not report the entire generation as failed.
 
 ---
 
-# 28. Recoverable Errors
+## 28. Recoverable Errors
 
 Examples:
 
@@ -731,7 +733,7 @@ default
 
 ---
 
-# 29. Fatal Errors
+## 29. Fatal Errors
 
 Examples:
 
@@ -746,7 +748,7 @@ Fatal errors should stop the relevant job immediately.
 
 ---
 
-# 30. Error Propagation
+## 30. Error Propagation
 
 Errors should be handled at the layer that can make a meaningful decision.
 
@@ -766,7 +768,7 @@ Do not handle an error too early if the layer cannot recover meaningfully.
 
 ---
 
-# 31. Context Wrapping
+## 31. Context Wrapping
 
 When propagating errors, preserve the original cause.
 
@@ -788,7 +790,7 @@ Do not replace the original error.
 
 ---
 
-# 32. Logging
+## 32. Logging
 
 Logs should contain useful context.
 
@@ -809,7 +811,7 @@ error happened
 
 ---
 
-# 33. Sensitive Data
+## 33. Sensitive Data
 
 Do not log:
 
@@ -826,7 +828,7 @@ Debug logging may include source snippets only when explicitly allowed.
 
 ---
 
-# 34. Error Reports
+## 34. Error Reports
 
 A developer-facing error report should ideally contain:
 
@@ -845,7 +847,7 @@ repair count
 
 ---
 
-# 35. User-Facing Errors
+## 35. User-Facing Errors
 
 User-facing errors should answer:
 
@@ -865,7 +867,7 @@ You can still preview the animation or export it as GIF.
 
 ---
 
-# 36. Internal Errors
+## 36. Internal Errors
 
 Unexpected internal conditions should be classified as:
 
@@ -879,7 +881,7 @@ Do not expose stack traces to normal users by default.
 
 ---
 
-# 37. Cancellation
+## 37. Cancellation
 
 User cancellation is not a failure.
 
@@ -898,7 +900,7 @@ When cancellation occurs:
 
 ---
 
-# 38. Job State
+## 38. Job State
 
 Generation jobs should have explicit states.
 
@@ -925,7 +927,7 @@ This makes partial failure easier to represent.
 
 ---
 
-# 39. Warnings
+## 39. Warnings
 
 Not every issue should become an error.
 
@@ -942,7 +944,7 @@ Warnings should not stop generation.
 
 ---
 
-# 40. Panic / Unhandled Exception
+## 40. Panic / Unhandled Exception
 
 Unexpected panics or exceptions should be caught at process or job boundaries where possible.
 
@@ -956,7 +958,7 @@ The system should:
 
 ---
 
-# 41. Resource Cleanup
+## 41. Resource Cleanup
 
 Failures must not leak:
 
@@ -980,7 +982,7 @@ cancellation
 
 ---
 
-# 42. Temporary Files
+## 42. Temporary Files
 
 Temporary resources should belong to a generation job.
 
@@ -997,7 +999,7 @@ Cleanup should be easy and deterministic.
 
 ---
 
-# 43. Testing Error Paths
+## 43. Testing Error Paths
 
 Error handling must be tested.
 
@@ -1021,7 +1023,7 @@ Successful-path testing alone is insufficient.
 
 ---
 
-# 44. Error Injection
+## 44. Error Injection
 
 Where useful, development builds may support controlled error injection.
 
@@ -1037,7 +1039,7 @@ This helps test fallback and recovery logic.
 
 ---
 
-# 45. Agent Behavior on Failure
+## 45. Agent Behavior on Failure
 
 The Agent must not hide failures by inventing data.
 
@@ -1067,7 +1069,7 @@ AI-generated conceptual trace
 
 ---
 
-# 46. Trust Levels
+## 46. Trust Levels
 
 Generated artifacts may optionally carry trust metadata.
 
@@ -1095,7 +1097,7 @@ This prevents inferred runtime behavior from being treated as verified execution
 
 ---
 
-# 47. Fallback Order
+## 47. Fallback Order
 
 Default recovery priority:
 
@@ -1117,7 +1119,7 @@ Never silently produce incorrect output.
 
 ---
 
-# 48. Final Rule
+## 48. Final Rule
 
 When choosing between:
 
@@ -1137,7 +1139,7 @@ Correctness takes priority over visual quality.
 
 ---
 
-# Error Handling Principle
+## Error Handling Principle
 
 The system should aim for:
 
