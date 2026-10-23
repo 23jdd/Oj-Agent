@@ -44,6 +44,17 @@ i-slint-backend-testing = "=1.18.1"
 [profile.dev]
 debug = 0
 
+# Keep geometry and Slint's per-pixel image preparation responsive in desktop dev builds.
+# Other dependencies retain the existing development profile.
+[profile.dev.package.oj-agent]
+opt-level = 2
+
+[profile.dev.package.i-slint-core]
+opt-level = 2
+
+[profile.dev.package.i-slint-renderer-skia]
+opt-level = 2
+
 [profile.release]
 lto = "thin"
 strip = true

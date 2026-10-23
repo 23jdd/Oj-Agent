@@ -252,3 +252,57 @@ fn scrolled_camera_matches_native_pixels_and_large_logical_scenes_stay_bounded()
     let huge = RasterSize::viewport(10_000., 8000., 2.).unwrap();
     assert!(huge.width <= 4096 && huge.width as u64 * huge.height as u64 * 4 <= 32 * 1024 * 1024);
 }
+
+#[test]
+fn fullscreen_camera_crops_only_blank_space_at_native_density() {
+    let camera = Viewport::for_content((2560., 1440.), (960., 730.), (0., 0.), 1.5).unwrap();
+    assert_eq!(camera.size, RasterSize::new(1440, 1095).unwrap());
+    assert_eq!(camera.scale, 1.5);
+    let edge = Viewport::for_content((800., 600.), (10_000., 10_000.), (9800., 9700.), 2.).unwrap();
+    assert_eq!(edge.size, RasterSize::new(400, 600).unwrap());
+    assert_eq!(edge.scale, 2.);
+    assert!(Viewport::for_content((800., 600.), (f32::NAN, 730.), (0., 0.), 1.).is_none());
+}
+
+#[test]
+fn cached_graph_pixels_survive_scrolling_dpi_changes_and_backwards_seeks() {
+    let ir = fixture(Algorithm::Bfs, vec![4, 2, 6, 1, 3, 5, 7], 0);
+    let scene = SkiaRenderer.prepare(&ir).unwrap();
+    for scale in [1., 1.5, 2.] {
+        let size = RasterSize::new(
+            (scene.timeline.width as f32 * scale).ceil() as u32,
+            (scene.timeline.height as f32 * scale).ceil() as u32,
+        )
+        .unwrap();
+        let full = scene
+            .frame_viewport(0.4, Viewport::new(size, 0., 0., scale).unwrap())
+            .unwrap();
+        let crop_size = RasterSize::new(300, 240).unwrap();
+        let camera = Viewport::new(crop_size, 100., 200., scale).unwrap();
+        let cropped = scene.frame_viewport(0.4, camera).unwrap();
+        let mut errors = Vec::new();
+        for row in 0..240usize {
+            let at = ((200. * scale) as usize + row) * size.width as usize * 4
+                + (100. * scale) as usize * 4;
+            errors.extend(
+                cropped.rgba[row * 1200..(row + 1) * 1200]
+                    .iter()
+                    .zip(&full.rgba[at..at + 1200])
+                    .map(|(a, b)| a.abs_diff(*b)),
+            );
+        }
+        // Skia's antialiased vector edges can vary slightly with the clip rectangle;
+        // missing or shifted shapes/text produce much larger errors than these bounds.
+        let maximum = errors.iter().copied().max().unwrap();
+        let mean = errors.iter().map(|v| f64::from(*v)).sum::<f64>() / errors.len() as f64;
+        assert!(
+            maximum <= 16 && mean < 0.25,
+            "scale {scale}: max coverage error {maximum}, mean {mean}"
+        );
+        scene.frame_viewport(0.16, camera).unwrap();
+        assert_eq!(
+            cropped.rgba,
+            scene.frame_viewport(0.4, camera).unwrap().rgba
+        );
+    }
+}

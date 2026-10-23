@@ -92,6 +92,8 @@ export component AppWindow inherits Window {
     in property <image> frame;
     in property <int> frame-pixel-width: 0;
     in property <int> frame-pixel-height: 0;
+    in property <length> frame-origin-x;
+    in property <length> frame-origin-y;
     in property <float> preview-scale-factor: 1;
     out property <length> preview-width: animation-page.preview-width;
     out property <length> preview-height: animation-page.preview-height;
@@ -120,6 +122,7 @@ export component AppWindow inherits Window {
     callback change-speed(int);
     callback export-gif;
     callback export-json;
+    callback preview-ready;
 
     forward-focus: shortcuts;
     shortcuts := FocusScope {
@@ -254,6 +257,7 @@ export component AppWindow inherits Window {
                     width: parent.width; height: parent.height;
                     visible: root.animation-open;
                     frame: root.frame; frame-pixel-width: root.frame-pixel-width; frame-pixel-height: root.frame-pixel-height;
+                    frame-origin-x: root.frame-origin-x; frame-origin-y: root.frame-origin-y;
                     preview-scale-factor: root.preview-scale-factor;
                     canvas-width: root.canvas-width; canvas-height: root.canvas-height;
                     title: root.animation-title; basis: root.animation-basis;

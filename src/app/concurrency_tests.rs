@@ -29,6 +29,54 @@ fn state(db: PathBuf) -> Rc<RefCell<State>> {
 }
 
 #[test]
+fn scrolling_accepts_an_inflight_frame_at_its_original_coordinates_but_seeks_reject_it() {
+    i_slint_backend_testing::init_no_event_loop();
+    let directory = tempfile::tempdir().unwrap();
+    let state = state(directory.path().join("sessions.sqlite3"));
+    let ui = AppWindow::new().unwrap();
+    ui.set_animation_open(true);
+    ui.set_canvas_width(10_000.);
+    ui.set_canvas_height(10_000.);
+    ui.show().unwrap();
+    let (a, t) = crate::trace::simulate(&ProblemInput::default()).unwrap();
+    let v = crate::visualization::plan(&a, &t).unwrap();
+    let animation = Arc::new(crate::animation::compile(&a, &t, &v).unwrap());
+    state.borrow_mut().animation = Some(animation.clone());
+    update_preview_size(&ui, &mut state.borrow_mut());
+    let epoch = state.borrow().preview_epoch;
+    let original = state.borrow().preview_view.unwrap();
+    ui.set_preview_scroll_x(-100.);
+    update_preview_size(&ui, &mut state.borrow_mut());
+    assert_eq!(
+        state.borrow().preview_epoch,
+        epoch,
+        "continuous camera movement must not starve completed frames"
+    );
+    let event = || Event::Preview {
+        animation: animation.clone(),
+        epoch,
+        canvas: (10_000, 10_000),
+        view: original.into(),
+        frame: Ok(preview::Pixels::new(
+            original.size.width,
+            original.size.height,
+        )),
+    };
+    handle_event(&ui, &mut state.borrow_mut(), event());
+    assert_eq!(ui.get_frame_origin_x(), original.x);
+    assert_eq!(ui.get_frame_pixel_width(), original.size.width as i32);
+    state.borrow_mut().preview_epoch += 1;
+    ui.set_frame_pixel_width(0);
+    handle_event(&ui, &mut state.borrow_mut(), event());
+    assert_eq!(
+        ui.get_frame_pixel_width(),
+        0,
+        "a frame from before the latest seek must still be rejected"
+    );
+    ui.hide().unwrap();
+}
+
+#[test]
 fn clearing_an_error_survives_navigation_and_preserves_other_conversations_and_history() {
     i_slint_backend_testing::init_no_event_loop();
     let directory = tempfile::tempdir().unwrap();

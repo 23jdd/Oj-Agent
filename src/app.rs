@@ -51,6 +51,7 @@ enum Event {
     Preview {
         animation: Arc<AnimationIr>,
         epoch: u64,
+        view: preview::PreviewView,
         canvas: (u32, u32),
         frame: Result<preview::Pixels>,
     },
@@ -327,13 +328,14 @@ fn update_preview_size(ui: &AppWindow, state: &mut State) {
     else {
         return;
     };
-    let scale = (size.width as f32 / ui.get_preview_width())
-        .min(size.height as f32 / ui.get_preview_height());
-    let Ok(view) = Viewport::new(
-        size,
-        (-ui.get_preview_scroll_x()).max(0.),
-        (-ui.get_preview_scroll_y()).max(0.),
-        scale,
+    let Some(view) = Viewport::for_content(
+        (ui.get_preview_width(), ui.get_preview_height()),
+        (ui.get_canvas_width(), ui.get_canvas_height()),
+        (
+            (-ui.get_preview_scroll_x()).max(0.),
+            (-ui.get_preview_scroll_y()).max(0.),
+        ),
+        dpi,
     ) else {
         return;
     };
@@ -351,14 +353,21 @@ fn update_preview_size(ui: &AppWindow, state: &mut State) {
             }
         }
     }
+    let resized = state.preview_size != Some(size)
+        || state
+            .preview_view
+            .is_some_and(|old| old.scale != view.scale);
     state.preview_size = Some(size);
     state.pending_resize = None;
     if state.preview_view == Some(view) {
         return;
     }
     state.preview_view = Some(view);
-    ui.set_preview_scale_factor(scale);
-    state.preview_epoch = state.preview_epoch.wrapping_add(1);
+    // A scrolling camera must not invalidate every in-flight frame at slower render rates.
+    // Its completed pixels remain anchored to their own scene coordinates.
+    if resized {
+        state.preview_epoch = state.preview_epoch.wrapping_add(1);
+    }
     state.last_frame = -1.;
 }
 
@@ -546,6 +555,7 @@ fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
             epoch,
             frame,
             canvas,
+            view,
         } => {
             if s.preview_epoch == epoch
                 && s.animation
@@ -554,6 +564,11 @@ fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
             {
                 match frame {
                     Ok(pixels) => {
+                        if let preview::PreviewView::Camera(view) = view {
+                            ui.set_preview_scale_factor(view.scale);
+                            ui.set_frame_origin_x(view.x);
+                            ui.set_frame_origin_y(view.y);
+                        }
                         ui.set_canvas_width(canvas.0 as f32);
                         ui.set_canvas_height(canvas.1 as f32);
                         ui.set_frame_pixel_width(pixels.width() as i32);
@@ -642,6 +657,20 @@ fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
                 result.map(|path| format!("已导出 {}", path.display())),
             );
         }
+    }
+}
+
+fn drain_events(ui: &AppWindow, state: &mut State) {
+    let mut latest_preview = None;
+    while let Ok(event) = state.rx.try_recv() {
+        if matches!(event, Event::Preview { .. }) {
+            latest_preview = Some(event);
+        } else {
+            handle_event(ui, state, event);
+        }
+    }
+    if let Some(event) = latest_preview {
+        handle_event(ui, state, event);
     }
 }
 
@@ -802,6 +831,22 @@ pub fn run() -> anyhow::Result<()> {
         db,
     }));
     refresh_sessions(&ui, &state.borrow())?;
+    {
+        let weak = ui.as_weak();
+        state.borrow().preview.set_waker(move || {
+            let _ = weak.upgrade_in_event_loop(|ui| ui.invoke_preview_ready());
+        })?;
+        let weak = ui.as_weak();
+        let state = state.clone();
+        ui.on_preview_ready(move || {
+            if let Some(ui) = weak.upgrade()
+                && let Ok(mut state) = state.try_borrow_mut()
+            {
+                update_preview_size(&ui, &mut state);
+                drain_events(&ui, &mut state);
+            }
+        });
+    }
     appearance::bind(&ui, state.clone(), style_path);
     if let Some(error) = style_error.or(model_error) {
         show_error(&ui, error);
@@ -995,9 +1040,7 @@ pub fn run() -> anyhow::Result<()> {
             };
             let mut s = tick_state.borrow_mut();
             update_preview_size(&ui, &mut s);
-            while let Ok(event) = s.rx.try_recv() {
-                handle_event(&ui, &mut s, event);
-            }
+            drain_events(&ui, &mut s);
             let now = Instant::now();
             let elapsed = now.duration_since(s.last).as_secs_f64();
             s.last = now;

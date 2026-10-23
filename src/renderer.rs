@@ -7,12 +7,15 @@ use crate::{
     ir::*,
     style::StyleConfig,
 };
+use skia_safe::QuickReject;
 use skia_safe::{
     AlphaType, Canvas, Color, ColorType, Font, FontMgr, ImageInfo, Paint, Rect, Typeface, surfaces,
 };
 use std::cell::RefCell;
 pub mod layout;
 mod presentation;
+mod raster;
+mod text;
 pub mod viewport;
 use layout::Box2;
 pub use viewport::{RasterSize, Viewport};
@@ -32,6 +35,8 @@ pub struct PreparedScene {
     faces: Faces,
     geometry: Vec<presentation::Geometry>,
     export_size: RasterSize,
+    text: RefCell<text::Cache>,
+    raster: RefCell<raster::Cache>,
 }
 
 pub mod palette {
@@ -130,25 +135,29 @@ struct Painter<'a> {
     style: &'a StyleConfig,
     faces: &'a Faces,
     geometry: presentation::Geometry,
+    text: &'a RefCell<text::Cache>,
+    raster: Option<&'a RefCell<raster::Cache>>,
 }
 impl Painter<'_> {
     fn centered(&self, value: &str, b: Box2, size: f32, bold: bool, opacity: f32) -> Result<()> {
         let canvas = self.canvas;
-        let size = presentation::text_size(size, self.style);
-        let f = font(self.faces, size, bold);
-        let (_, metrics) = f.metrics();
+        if opacity <= 0.001 || self.outside(b, presentation::text_size(size, self.style)) {
+            return Ok(());
+        }
+        let text = self
+            .text
+            .borrow_mut()
+            .get(value, size, bold, None, self.faces, self.style);
         let center = b.center();
-        let lines: Vec<_> = value.split('\n').collect();
-        let stride = size * self.style.fonts.line_height;
-        for (i, line) in lines.iter().enumerate() {
+        for (i, line) in text.lines.iter().enumerate() {
             canvas.draw_str(
                 line,
                 (
-                    center.0 - f.measure_str(line, None).0 / 2.,
-                    center.1 - (metrics.ascent + metrics.descent) / 2.
-                        + (i as f32 - (lines.len() - 1) as f32 / 2.) * stride,
+                    center.0 - text.widths[i] / 2.,
+                    center.1 - (text.ascent + text.descent) / 2.
+                        + (i as f32 - (text.lines.len() - 1) as f32 / 2.) * text.stride,
                 ),
-                &f,
+                &text.font,
                 &paint(self.style.colors.text_primary.skia(), opacity),
             );
         }
@@ -167,20 +176,41 @@ impl Painter<'_> {
         if opacity <= 0.001 || b.width <= 0. || b.height <= 0. {
             return Ok(());
         }
-        let size = presentation::text_size(size, self.style);
-        let f = font(self.faces, size, bold);
-        let (_, metrics) = f.metrics();
-        let stride = size * self.style.fonts.line_height;
-        let lines = presentation::lines(value, &f, b.width);
-        for (i, line) in lines.iter().enumerate() {
+        if self.outside(b, presentation::text_size(size, self.style)) {
+            return Ok(());
+        }
+        let text =
+            self.text
+                .borrow_mut()
+                .get(value, size, bold, Some(b.width), self.faces, self.style);
+        for (i, line) in text.lines.iter().enumerate() {
+            let y = b.y + i as f32 * text.stride;
+            if self.outside(
+                Box2 {
+                    y,
+                    height: text.descent - text.ascent,
+                    ..b
+                },
+                4.,
+            ) {
+                continue;
+            }
             canvas.draw_str(
                 line,
-                (b.x, b.y - metrics.ascent + i as f32 * stride),
-                &f,
+                (b.x, y - text.ascent),
+                &text.font,
                 &paint(color, opacity),
             );
         }
         Ok(())
+    }
+    fn outside(&self, b: Box2, margin: f32) -> bool {
+        self.canvas.quick_reject(&Rect::from_xywh(
+            b.x - margin,
+            b.y - margin,
+            b.width + 2. * margin,
+            b.height + 2. * margin,
+        ))
     }
 }
 
@@ -207,6 +237,8 @@ impl SkiaRenderer {
             style: style.clone(),
             faces,
             geometry,
+            text: RefCell::default(),
+            raster: RefCell::default(),
             export_size: RasterSize::fit(
                 (animation.scene.width, animation.scene.height),
                 (
@@ -307,12 +339,17 @@ impl PreparedScene {
                 style: &self.style,
                 faces: &self.faces,
                 geometry: *geometry,
+                text: &self.text,
+                raster: viewport.map(|_| &self.raster),
             };
             let sample = track.sample(time);
             if sample.opacity <= 0.001 {
                 continue;
             }
             let bounds = Box2::from(sample.object);
+            if painter.outside(bounds, geometry.pad.max(64.)) {
+                continue;
+            }
             if sample.opacity < 0.999 {
                 canvas.save_layer_alpha_f(rect(bounds), sample.opacity);
             } else {
@@ -452,6 +489,12 @@ impl Painter<'_> {
     ) -> Result<()> {
         let canvas = self.canvas;
         if opacity <= 0.001 || state == "hidden" {
+            return Ok(());
+        }
+        if self.outside(
+            b,
+            self.style.geometry.shadow_offset + self.style.geometry.border_width + 4.,
+        ) {
             return Ok(());
         }
         canvas.draw_round_rect(
@@ -783,6 +826,17 @@ impl Painter<'_> {
                 continue;
             }
             let point = points[i];
+            if self.outside(
+                Box2 {
+                    x: point.0 - radius,
+                    y: point.1 - radius,
+                    width: 2. * radius,
+                    height: 2. * radius + 32.,
+                },
+                self.style.geometry.shadow_offset + presentation::text_size(13., self.style),
+            ) {
+                continue;
+            }
             let highlight = s.highlights[i];
             let state = s
                 .structure
@@ -790,19 +844,16 @@ impl Painter<'_> {
                 .get(i)
                 .map(String::as_str)
                 .unwrap_or("normal");
-            canvas.draw_circle(
-                (
-                    point.0 + self.style.geometry.shadow_offset,
-                    point.1 + self.style.geometry.shadow_offset,
-                ),
-                radius,
-                &paint(self.style.colors.border.skia(), 1.),
-            );
-            canvas.draw_circle(point, radius, &paint(self.state_fill(state, highlight), 1.));
-            let mut border = paint(self.style.colors.border.skia(), 1.);
-            border.set_style(skia_safe::paint::Style::Stroke);
-            border.set_stroke_width(self.style.geometry.border_width);
-            canvas.draw_circle(point, radius, &border);
+            let fill = self.state_fill(state, highlight);
+            let cached = (highlight <= 0.001 || highlight >= 0.999)
+                && self.raster.is_some_and(|cache| {
+                    cache
+                        .borrow_mut()
+                        .draw(canvas, point, radius, fill, self.style)
+                });
+            if !cached {
+                raster::circle(canvas, point, radius, fill, self.style);
+            }
             let node = Box2 {
                 x: point.0 - radius,
                 y: point.1 - radius,

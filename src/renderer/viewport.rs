@@ -9,6 +9,34 @@ pub struct Viewport {
     pub scale: f32,
 }
 impl Viewport {
+    /// Keep native density, but don't rasterize empty window area beyond the canvas.
+    pub fn for_content(
+        window: (f32, f32),
+        canvas: (f32, f32),
+        origin: (f32, f32),
+        dpi: f32,
+    ) -> Option<Self> {
+        let full = RasterSize::viewport(window.0, window.1, dpi)?;
+        if ![canvas.0, canvas.1, origin.0, origin.1]
+            .iter()
+            .all(|v| v.is_finite())
+            || canvas.0 <= 0.
+            || canvas.1 <= 0.
+            || origin.0 < 0.
+            || origin.1 < 0.
+        {
+            return None;
+        }
+        let scale = (full.width as f32 / window.0).min(full.height as f32 / window.1);
+        let width = window.0.min((canvas.0 - origin.0).max(1.));
+        let height = window.1.min((canvas.1 - origin.1).max(1.));
+        let size = RasterSize::new(
+            (width * scale).ceil().max(1.) as u32,
+            (height * scale).ceil().max(1.) as u32,
+        )
+        .ok()?;
+        Self::new(size, origin.0, origin.1, scale).ok()
+    }
     pub fn new(size: RasterSize, x: f32, y: f32, scale: f32) -> Result<Self> {
         RasterSize::new(size.width, size.height)?;
         if ![x, y, scale].iter().all(|v| v.is_finite()) || x < 0. || y < 0. || scale <= 0. {

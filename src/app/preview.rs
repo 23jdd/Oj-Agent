@@ -47,6 +47,7 @@ struct Request {
 struct Pending {
     request: Option<Request>,
     closed: bool,
+    wake_ui: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 /// One pending request prevents a drag/seek burst from building an unbounded queue.
@@ -63,6 +64,7 @@ impl PreviewWorker {
             let mut last_sent = None;
             let mut camera = None;
             let mut current_style: Option<Arc<StyleConfig>> = None;
+            let mut spare: Option<Pixels> = None;
             loop {
                 let request = {
                     let (pending, wake) = &*worker;
@@ -104,6 +106,12 @@ impl PreviewWorker {
                         cache.clear();
                         last_sent = None;
                         camera = Some(request.view);
+                        if spare.as_ref().is_some_and(|pixels| {
+                            pixels.width() != request.view.size().width
+                                || pixels.height() != request.view.size().height
+                        }) {
+                            spare = None;
+                        }
                     }
                     let time = scene.timeline.clamp_time(request.time)?;
                     let key = scene.frame_key(time);
@@ -120,14 +128,16 @@ impl PreviewWorker {
                         let (width, height) = (size.width, size.height);
                         let frame_bytes = width as usize * height as usize * 4;
                         let limit = (32 * 1024 * 1024 / frame_bytes).clamp(1, 16);
-                        let mut pixels = if cache.len() >= limit {
+                        let retired = (cache.len() >= limit).then(|| {
                             cache
                                 .pop_front()
                                 .expect("cache contains a reusable buffer")
                                 .1
-                        } else {
-                            Pixels::new(width, height)
-                        };
+                        });
+                        // Never immediately overwrite the just-published fullscreen frame:
+                        // Slint still owns it, which would force a full-buffer COW copy.
+                        let mut pixels = spare.take().unwrap_or_else(|| Pixels::new(width, height));
+                        spare = retired;
                         match request.view {
                             PreviewView::Fit(size) => {
                                 scene.frame_into(time, size, pixels.make_mut_bytes())?
@@ -151,6 +161,7 @@ impl PreviewWorker {
                     .send(Event::Preview {
                         animation: request.animation,
                         epoch: request.epoch,
+                        view: request.view,
                         canvas,
                         frame,
                     })
@@ -158,9 +169,32 @@ impl PreviewWorker {
                 {
                     break;
                 }
+                let wake_ui = worker
+                    .0
+                    .lock()
+                    .ok()
+                    .and_then(|pending| pending.wake_ui.clone());
+                if let Some(wake) = wake_ui {
+                    wake();
+                }
             }
         });
         Self(shared)
+    }
+    pub fn set_waker(&self, wake: impl Fn() + Send + Sync + 'static) -> Result<()> {
+        self.0
+            .0
+            .lock()
+            .map_err(|_| {
+                AppError::new(
+                    "RENDER_WORKER_STOPPED",
+                    "Render",
+                    "Rendering",
+                    "The preview renderer has stopped.",
+                )
+            })?
+            .wake_ui = Some(Arc::new(wake));
+        Ok(())
     }
     pub fn request(
         &self,
@@ -327,5 +361,72 @@ mod tests {
         }
         assert_ne!(frames[0].as_bytes(), frames[1].as_bytes());
         assert_eq!(frames[0].as_bytes(), frames[2].as_bytes());
+    }
+    #[test]
+    fn completed_preview_wakes_the_ui_after_publishing_pixels() {
+        let (tx, rx) = mpsc::channel();
+        let (wake_tx, wake_rx) = mpsc::channel();
+        let worker = PreviewWorker::new(tx);
+        worker
+            .set_waker(move || {
+                let _ = wake_tx.send(());
+            })
+            .unwrap();
+        worker
+            .request(
+                fixture(),
+                0.4,
+                1,
+                RasterSize::new(400, 300).unwrap(),
+                Arc::default(),
+            )
+            .unwrap();
+        wake_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            rx.try_recv().unwrap(),
+            Event::Preview { frame: Ok(_), .. }
+        ));
+    }
+    #[test]
+    fn fullscreen_buffers_rotate_without_copying_the_frame_still_owned_by_the_ui() {
+        let (tx, rx) = mpsc::channel();
+        let worker = PreviewWorker::new(tx);
+        let animation = fixture();
+        let style: Arc<StyleConfig> = Arc::default();
+        // More than half the cache budget: only one frame fits in the LRU cache.
+        let size = RasterSize::new(2300, 1900).unwrap();
+        let receive = || match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
+            Event::Preview {
+                frame: Ok(pixels), ..
+            } => pixels,
+            _ => panic!("missing fullscreen frame"),
+        };
+        worker
+            .request(animation.clone(), 0.08, 0, size, style.clone())
+            .unwrap();
+        let mut displayed = receive();
+        let first = displayed.as_bytes().as_ptr() as usize;
+        worker
+            .request(animation.clone(), 0.16, 0, size, style.clone())
+            .unwrap();
+        let next = receive();
+        let second = next.as_bytes().as_ptr() as usize;
+        assert_ne!(first, second);
+        drop(displayed);
+        displayed = next;
+        worker
+            .request(animation.clone(), 0.24, 0, size, style.clone())
+            .unwrap();
+        let next = receive();
+        assert_eq!(
+            next.as_bytes().as_ptr() as usize,
+            first,
+            "reuse the buffer already released by the UI"
+        );
+        drop(displayed);
+        displayed = next;
+        worker.request(animation, 0.30, 0, size, style).unwrap();
+        assert_eq!(receive().as_bytes().as_ptr() as usize, second);
+        drop(displayed);
     }
 }

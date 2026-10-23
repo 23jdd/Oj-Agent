@@ -6,6 +6,8 @@ export component AnimationPage inherits Rectangle {
     in property <image> frame;
     in property <int> frame-pixel-width;
     in property <int> frame-pixel-height;
+    in property <length> frame-origin-x;
+    in property <length> frame-origin-y;
     in property <float> preview-scale-factor: 1;
     in property <length> canvas-width: 960px;
     in property <length> canvas-height: 720px;
@@ -63,9 +65,9 @@ export component AnimationPage inherits Rectangle {
                 content-height: max(self.visible-height, root.canvas-height);
                 accessible-role: groupbox;
                 accessible-label: "动画画布，可横向和纵向滚动";
-                // Only the camera's visible pixels are rasterized. Keep its image fixed in the viewport.
+                // Keep completed pixels anchored to their camera while the next scroll frame renders.
                 Image {
-                    x: -viewport.content-x; y: -viewport.content-y;
+                    x: root.frame-origin-x; y: root.frame-origin-y;
                     width: root.frame-pixel-width * 1px / root.preview-scale-factor;
                     height: root.frame-pixel-height * 1px / root.preview-scale-factor;
                     source: root.frame;
