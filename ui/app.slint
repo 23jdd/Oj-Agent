@@ -82,6 +82,10 @@ export component AppWindow inherits Window {
     in property <float> preview-scale-factor: 1;
     out property <length> preview-width: animation-page.preview-width;
     out property <length> preview-height: animation-page.preview-height;
+    in property <length> canvas-width: 960px;
+    in property <length> canvas-height: 720px;
+    in-out property <length> preview-scroll-x <=> animation-page.scroll-x;
+    in-out property <length> preview-scroll-y <=> animation-page.scroll-y;
     in property <string> status-text: "就绪";
     in property <string> token-usage;
     in property <string> time-label: "0.0 / 0.0 s";
@@ -224,6 +228,7 @@ export component AppWindow inherits Window {
                     visible: root.animation-open;
                     frame: root.frame; frame-pixel-width: root.frame-pixel-width; frame-pixel-height: root.frame-pixel-height;
                     preview-scale-factor: root.preview-scale-factor;
+                    canvas-width: root.canvas-width; canvas-height: root.canvas-height;
                     title: root.animation-title; basis: root.animation-basis;
                     case-names: root.case-names; case-index <=> root.case-index;
                     busy: root.busy; playing: root.playing; time-label: root.time-label;

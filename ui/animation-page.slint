@@ -7,8 +7,12 @@ export component AnimationPage inherits Rectangle {
     in property <int> frame-pixel-width;
     in property <int> frame-pixel-height;
     in property <float> preview-scale-factor: 1;
-    out property <length> preview-width: viewport.width;
-    out property <length> preview-height: viewport.height;
+    in property <length> canvas-width: 960px;
+    in property <length> canvas-height: 720px;
+    out property <length> preview-width: viewport.visible-width;
+    out property <length> preview-height: viewport.visible-height;
+    in-out property <length> scroll-x <=> viewport.content-x;
+    in-out property <length> scroll-y <=> viewport.content-y;
     in property <string> title;
     in property <string> basis;
     in property <[string]> case-names;
@@ -37,30 +41,35 @@ export component AnimationPage inherits Rectangle {
             SelectBox { model: root.case-names; current-index <=> root.case-index; width: 220px; horizontal-stretch: 0; enabled: !root.busy; selected(value) => { root.select-case(self.current-index); } }
         }
         ScrollView {
-            vertical-stretch: 1;
+            min-height: 0px;
+            preferred-height: min(80px, max(Theme.label-size * 1.5, basis.preferred-height));
+            max-height: 80px;
+            vertical-stretch: 0;
             content-width: self.visible-width;
-            content-height: max(self.visible-height, body.preferred-height);
-            body := VerticalLayout {
-                spacing: Theme.spacing-md;
-                width: parent.width;
-                Text { text: root.basis; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
-                Panel {
-                    min-height: 240px; vertical-stretch: 1;
-                    viewport := Rectangle {
-                        x: ceil(Theme.border-width / 1px * root.preview-scale-factor) * 1px / root.preview-scale-factor;
-                        y: self.x; width: parent.width - 2 * self.x; height: parent.height - 2 * self.y;
-                        clip: true;
-                        Image {
-                            property <length> native-width: root.frame-pixel-width * 1px / root.preview-scale-factor;
-                            property <length> native-height: root.frame-pixel-height * 1px / root.preview-scale-factor;
-                            property <float> fit: min(1, parent.width / max(1px, self.native-width), parent.height / max(1px, self.native-height));
-                            width: self.native-width * self.fit; height: self.native-height * self.fit;
-                            x: round((parent.width - self.width) / 1px * root.preview-scale-factor / 2) * 1px / root.preview-scale-factor;
-                            y: round((parent.height - self.height) / 1px * root.preview-scale-factor / 2) * 1px / root.preview-scale-factor;
-                            source: root.frame; image-fit: contain;
-                        }
-                    }
+            content-height: basis.preferred-height;
+            basis := Text { width: parent.width; text: root.basis; color: Theme.text-secondary; font-size: Theme.label-size; wrap: word-wrap; }
+        }
+        Panel {
+            vertical-stretch: 1;
+            min-height: 120px;
+            viewport := ScrollView {
+                x: Theme.border-width; y: Theme.border-width;
+                width: parent.width - 2 * Theme.border-width;
+                height: parent.height - 2 * Theme.border-width;
+                content-width: max(self.visible-width, root.canvas-width);
+                content-height: max(self.visible-height, root.canvas-height);
+                accessible-role: groupbox;
+                accessible-label: "动画画布，可横向和纵向滚动";
+                // Only the camera's visible pixels are rasterized. Keep its image fixed in the viewport.
+                Image {
+                    x: -viewport.content-x; y: -viewport.content-y;
+                    width: root.frame-pixel-width * 1px / root.preview-scale-factor;
+                    height: root.frame-pixel-height * 1px / root.preview-scale-factor;
+                    source: root.frame;
+                    image-fit: contain;
                 }
+            }
+        }
         SeekBar { value <=> root.position; enabled: !root.busy; changed(value) => { root.seek(value); } }
         HorizontalLayout {
             spacing: Theme.spacing-sm;
@@ -77,7 +86,5 @@ export component AnimationPage inherits Rectangle {
             AppButton { text: "导出 GIF"; width: 104px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.export-gif(); } }
             AppButton { text: "保存动画"; width: 104px; horizontal-stretch: 0; enabled: !root.busy; clicked => { root.export-json(); } }
         }
-        }
-    }
     }
 }

@@ -97,13 +97,64 @@ pub fn graph_points_for(
     positions: &[[f32; 2]],
     edges: &[[usize; 2]],
 ) -> Vec<(f32, f32)> {
+    graph_points_padded(object, count, positions, edges, 48.)
+}
+
+pub fn graph_points_padded(
+    object: &SceneObject,
+    count: usize,
+    positions: &[[f32; 2]],
+    edges: &[[usize; 2]],
+    pad: f32,
+) -> Vec<(f32, f32)> {
+    let points = positioned_graph_points(object, count, positions, edges, pad);
+    if points.iter().enumerate().any(|(i, a)| {
+        points
+            .iter()
+            .skip(i + 1)
+            .any(|b| (a.0 - b.0).hypot(a.1 - b.1) < 0.001)
+    }) {
+        // Cyclic trees and coincident coordinates still need distinct, accessible nodes.
+        let cols = (count as f32).sqrt().ceil().max(1.) as usize;
+        let rows = count.div_ceil(cols);
+        return (0..count)
+            .map(|i| {
+                (
+                    object.x
+                        + pad
+                        + (i % cols) as f32 * (object.width - 2. * pad).max(1.)
+                            / (cols - 1).max(1) as f32,
+                    object.y
+                        + pad
+                        + (i / cols) as f32 * (object.height - 2. * pad).max(1.)
+                            / (rows - 1).max(1) as f32,
+                )
+            })
+            .collect();
+    }
+    points
+}
+
+fn positioned_graph_points(
+    object: &SceneObject,
+    count: usize,
+    positions: &[[f32; 2]],
+    edges: &[[usize; 2]],
+    pad: f32,
+) -> Vec<(f32, f32)> {
     if count == 0 {
         return vec![];
     }
-    let pad = 48.;
     let width = (object.width - 2. * pad).max(1.);
     let height = (object.height - 2. * pad).max(1.);
-    if positions.len() == count {
+    if positions.len() == count
+        && !positions.iter().enumerate().any(|(i, a)| {
+            positions
+                .iter()
+                .skip(i + 1)
+                .any(|b| (a[0] - b[0]).hypot(a[1] - b[1]) < 0.0001)
+        })
+    {
         return positions
             .iter()
             .map(|[x, y]| {
@@ -135,7 +186,7 @@ pub fn graph_points_for(
             })
             .collect()
     } else {
-        let columns = ((count as f32 * width / height).sqrt().ceil() as usize).min(count);
+        let columns = (count as f32).sqrt().ceil() as usize;
         let rows = count.div_ceil(columns);
         (0..count)
             .map(|i| {
@@ -146,6 +197,51 @@ pub fn graph_points_for(
             })
             .collect()
     }
+}
+
+pub fn natural_cells(
+    object: &SceneObject,
+    count: usize,
+    size: (f32, f32),
+    pad: f32,
+    gap: f32,
+) -> Vec<Box2> {
+    if count == 0 {
+        return vec![];
+    }
+    let (columns, rows) = cell_shape(object, count);
+    let left = object.x + pad;
+    let top = object.y + pad;
+    (0..count)
+        .map(|i| {
+            let (col, row) = if object.kind == "stack" {
+                (i / rows, rows - 1 - i % rows)
+            } else {
+                (i % columns, i / columns)
+            };
+            Box2 {
+                x: left + col as f32 * (size.0 + gap),
+                y: top + row as f32 * (size.1 + gap),
+                width: size.0,
+                height: size.1,
+            }
+        })
+        .collect()
+}
+
+pub fn cell_shape(object: &SceneObject, count: usize) -> (usize, usize) {
+    if object.kind == "grid" {
+        return (object.cols.max(1) as usize, object.rows.max(1) as usize);
+    }
+    let columns = if object.kind == "stack" {
+        count.div_ceil(6)
+    } else if object.kind == "table" {
+        count.min(8)
+    } else {
+        count.min(12)
+    }
+    .max(1);
+    (columns, count.div_ceil(columns))
 }
 
 fn complete_tree_points(

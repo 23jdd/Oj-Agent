@@ -1,7 +1,7 @@
 use oj_agent::{
     animation::{self, timeline::Timeline},
     ir::*,
-    renderer::{RasterSize, Renderer, SkiaRenderer, layout},
+    renderer::{RasterSize, Renderer, SkiaRenderer, Viewport, layout},
     trace, visualization,
 };
 
@@ -210,4 +210,45 @@ fn gif_rounding_preserves_total_duration_at_30_fps() {
         duration += frame.delay as u64;
     }
     assert!((duration as f64 / 100. - ir.duration).abs() <= 0.011);
+}
+
+#[test]
+fn scrolled_camera_matches_native_pixels_and_large_logical_scenes_stay_bounded() {
+    let ir = fixture(Algorithm::TwoSum, vec![2, 7, 11, 15], 9);
+    let scene = SkiaRenderer.prepare(&ir).unwrap();
+    for scale in [1., 1.5, 2.] {
+        let full_size = RasterSize::new(
+            (scene.timeline.width as f32 * scale) as u32,
+            (scene.timeline.height as f32 * scale) as u32,
+        )
+        .unwrap();
+        let full = scene
+            .frame_viewport(0.24, Viewport::new(full_size, 0., 0., scale).unwrap())
+            .unwrap();
+        let size = RasterSize::new(320, 240).unwrap();
+        let camera = Viewport::new(size, 100., 200., scale).unwrap();
+        let frame = scene.frame_viewport(0.24, camera).unwrap();
+        for y in 0..size.height as usize {
+            let source = ((y + (200. * scale) as usize) * full_size.width as usize
+                + (100. * scale) as usize)
+                * 4;
+            assert_eq!(
+                &frame.rgba[y * 320 * 4..(y + 1) * 320 * 4],
+                &full.rgba[source..source + 320 * 4]
+            );
+        }
+    }
+    let mut large = ir.clone();
+    large.scene.width = 100_000;
+    large.scene.height = 50_000;
+    let scene = SkiaRenderer.prepare(&large).unwrap();
+    let size = RasterSize::viewport(800., 600., 1.5).unwrap();
+    let camera = Viewport::new(size, 90_000., 40_000., 1.5).unwrap();
+    let frame = scene.frame_viewport(0.24, camera).unwrap();
+    assert_eq!(frame.rgba.len(), 1200 * 900 * 4);
+    assert!(scene.frame(0.24).is_ok());
+    assert!(Viewport::new(size, f32::NAN, 0., 1.).is_err());
+    assert!(Viewport::new(size, 0., -1., 1.).is_err());
+    let huge = RasterSize::viewport(10_000., 8000., 2.).unwrap();
+    assert!(huge.width <= 4096 && huge.width as u64 * huge.height as u64 * 4 <= 32 * 1024 * 1024);
 }

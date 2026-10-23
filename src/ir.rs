@@ -577,9 +577,9 @@ impl AnimationIr {
     pub fn validate(&self) -> Result<()> {
         self.header.validate("animation-ir")?;
         if self.scene.width < 320
-            || self.scene.width > 1920
+            || self.scene.width > 1_000_000
             || self.scene.height < 240
-            || self.scene.height > 1080
+            || self.scene.height > 1_000_000
             || !self.duration.is_finite()
             || self.duration <= 0.
             || self.duration > 3600.

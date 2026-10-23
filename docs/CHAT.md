@@ -14,6 +14,8 @@ Unsent drafts and attachment selections are kept per conversation for the curren
 
 AI may answer without animation, verify code without creating animation, or create animation when useful. An animation appears as `[打开动画](oj-animation:UUID)` in a message. This is an application-local identifier: clicking opens the native animation page, never a browser, localhost page or web service. The router checks that the artifact belongs to the current conversation. The page supports case selection, play/pause, seek, steps, speed, GIF and JSON export, and return to chat. Animation and message records persist together.
 
+Large animations scroll horizontally and vertically at readable natural sizes. Text blocks expand and wrap fully; dense structures expand the canvas instead of shrinking labels and nodes. Playback controls stay visible while scrolling. 动画画布支持横向和纵向滚动；图形、标签保持正常尺寸，长说明完整换行，后续面板自动让出空间。暂停时滚动也会刷新，播放和返回按钮保持可见。
+
 ## Token usage / Token 用量
 
 The footer shows input, output and total tokens for the selected conversation,

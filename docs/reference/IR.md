@@ -33,6 +33,13 @@ deterministic. `tree`, `graph`, `linked-list` and `grid` object kinds are
 rendered by the existing Skia renderer; values-only objects still use the
 array/table/stack/queue layouts.
 
+Scene dimensions are logical layout coordinates, validated within 320–1,000,000
+pixels wide and 240–1,000,000 pixels tall. They are independent of the bounded
+preview raster. The renderer may expand presentation geometry to reserve readable
+labels and complete text across the timeline without altering algorithm data or
+saved keyframes. The desktop scrolls that canvas; fixed-size exports fit the full
+presentation within their output resolution. See [renderer behavior](../RENDERER.md).
+
 ## 1. Purpose
 
 This document defines the intermediate representations used by the OJ Resolve Animation Agent.

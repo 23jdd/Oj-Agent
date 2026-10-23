@@ -43,8 +43,11 @@ treatment guide the native Slint components; React is not used.
   window renderer. Preview frames are painted by skia-safe on a worker directly
   into shared premultiplied RGBA storage, cached by timeline state, and displayed
   through Slint's image interface.
-  Render the preview at the viewport's physical pixel size and present it without
-  upscaling. Debounce resize redraws by 120ms and refresh paused frames too.
+  Keep animation text and shapes at readable natural sizes on a two-axis scrollable
+  canvas. Expand panels for full text and dense structures; keep playback and return
+  controls visible outside the canvas. Rasterize only the camera's visible physical
+  pixels, independently of the canvas extent, within the pixel budget. Debounce resize
+  redraws by 120ms; scroll redraws also refresh paused frames immediately.
   Use the shared font-family token and keep small labels readable.
 - The **外观** editor configures shared font, color and geometry tokens. Keep
   editable values in a draft until validated and saved; retain the default

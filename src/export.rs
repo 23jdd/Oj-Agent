@@ -57,8 +57,8 @@ pub fn gif_cancellable_styled(
         let palette = palette::theme_palette(&style.colors);
         let mut encoder = gif::Encoder::new(
             output.as_file_mut(),
-            animation.scene.width as u16,
-            animation.scene.height as u16,
+            scene.export_size().width as u16,
+            scene.export_size().height as u16,
             &palette.colors,
         )
         .map_err(|e| AppError::io("Encoding", e))?;

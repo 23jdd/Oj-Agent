@@ -5,15 +5,34 @@ use oj_agent::{
 };
 use serde_json::json;
 fn main() -> anyhow::Result<()> {
-    let directory = std::path::PathBuf::from("target/chat-review/profile");
+    let large = std::env::args().any(|arg| arg == "--large");
+    let directory = std::path::PathBuf::from(if large {
+        "target/animation-scroll-review/profile"
+    } else {
+        "target/chat-review/profile"
+    });
     std::fs::create_dir_all(&directory)?;
-    let source = "function solve(input, emit) {const a=[...input];emit({values:a,explanation:'读取输入'});a.sort((x,y)=>x-y);emit({values:a,explanation:'排序完成'});return a;}";
+    let source = if large {
+        "function solve(input, emit) { const nodes=Array.from({length:64},(_,i)=>({id:String(i),label:'Readable node '+i,value:i})); const edges=nodes.slice(1).map((n,i)=>({from:String(i),to:n.id})); emit({nodes,edges,explanation:'Full explanation\\n'.repeat(100)+'LAST LINE / 最后一行',state:'完整状态信息'}); return [...input].sort((a,b)=>a-b); }"
+    } else {
+        "function solve(input, emit) {const a=[...input];emit({values:a,explanation:'读取输入'});a.sort((x,y)=>x-y);emit({values:a,explanation:'排序完成'});return a;}"
+    };
     let request: oj_sandbox::Request = serde_json::from_value(json!({"source":source,"cases":[
         {"name":"一般输入","category":"normal","input":[3,1,2],"expected":[1,2,3]},
         {"name":"空输入","category":"boundary","input":[],"expected":[]},
         {"name":"重复与负数","category":"adversarial","input":[2,-1,2],"expected":[-1,2,2]}
     ]}))?;
     let report = oj_sandbox::verify(&request, Default::default()).map_err(anyhow::Error::msg)?;
+    anyhow::ensure!(
+        report.passed,
+        "Review verification failed: {:?}",
+        report
+            .cases
+            .iter()
+            .filter(|case| !case.passed)
+            .map(|case| (&case.name, &case.error))
+            .collect::<Vec<_>>()
+    );
     let mut store = SqliteStore::open(&directory.join("sessions.sqlite3"))?;
     let session = store.create_chat("对话界面预览")?;
     let verification = store.add_artifact(
@@ -28,7 +47,7 @@ fn main() -> anyhow::Result<()> {
         &verification,
         "本机 JavaScript 示例（界面预览数据）",
         "排序执行过程",
-        "array",
+        if large { "graph" } else { "array" },
         &Default::default(),
     )?;
     let artifact = store.add_artifact(

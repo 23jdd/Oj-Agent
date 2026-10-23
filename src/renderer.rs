@@ -12,9 +12,10 @@ use skia_safe::{
 };
 use std::cell::RefCell;
 pub mod layout;
+mod presentation;
 pub mod viewport;
 use layout::Box2;
-pub use viewport::RasterSize;
+pub use viewport::{RasterSize, Viewport};
 
 pub struct Frame {
     pub width: u32,
@@ -29,6 +30,8 @@ pub struct PreparedScene {
     pub timeline: Timeline,
     style: StyleConfig,
     faces: Faces,
+    geometry: Vec<presentation::Geometry>,
+    export_size: RasterSize,
 }
 
 pub mod palette {
@@ -126,35 +129,29 @@ struct Painter<'a> {
     canvas: &'a Canvas,
     style: &'a StyleConfig,
     faces: &'a Faces,
+    geometry: presentation::Geometry,
 }
 impl Painter<'_> {
     fn centered(&self, value: &str, b: Box2, size: f32, bold: bool, opacity: f32) -> Result<()> {
         let canvas = self.canvas;
-        let scale = canvas.local_to_device_as_3x3().scale_x().abs().max(0.01);
-        let size = (size * self.style.fonts.animation_scale)
-            .max((self.style.fonts.minimum_text_pixels - 1.) / scale);
-        let size = if bold {
-            size.min(b.height * 0.85)
-        } else {
-            size
-        };
-        let mut f = font(self.faces, size, bold);
-        let measured = f.measure_str(value, None).0;
-        if measured > (b.width - 12.).max(1.) {
-            f.set_size(size * (b.width - 12.).max(1.) / measured);
-        }
-        let width = f.measure_str(value, None).0;
+        let size = presentation::text_size(size, self.style);
+        let f = font(self.faces, size, bold);
         let (_, metrics) = f.metrics();
         let center = b.center();
-        canvas.draw_str(
-            value,
-            (
-                center.0 - width / 2.,
-                center.1 - (metrics.ascent + metrics.descent) / 2.,
-            ),
-            &f,
-            &paint(self.style.colors.text_primary.skia(), opacity),
-        );
+        let lines: Vec<_> = value.split('\n').collect();
+        let stride = size * self.style.fonts.line_height;
+        for (i, line) in lines.iter().enumerate() {
+            canvas.draw_str(
+                line,
+                (
+                    center.0 - f.measure_str(line, None).0 / 2.,
+                    center.1 - (metrics.ascent + metrics.descent) / 2.
+                        + (i as f32 - (lines.len() - 1) as f32 / 2.) * stride,
+                ),
+                &f,
+                &paint(self.style.colors.text_primary.skia(), opacity),
+            );
+        }
         Ok(())
     }
     fn text_block(
@@ -170,44 +167,11 @@ impl Painter<'_> {
         if opacity <= 0.001 || b.width <= 0. || b.height <= 0. {
             return Ok(());
         }
-        let scale = canvas.local_to_device_as_3x3().scale_x().abs().max(0.01);
-        let size = (size * self.style.fonts.animation_scale)
-            .max(self.style.fonts.minimum_text_pixels / scale);
+        let size = presentation::text_size(size, self.style);
         let f = font(self.faces, size, bold);
         let (_, metrics) = f.metrics();
         let stride = size * self.style.fonts.line_height;
-        let glyph_height = metrics.descent - metrics.ascent;
-        let max_lines = (1. + ((b.height - glyph_height).max(0.) / stride).floor()) as usize;
-        let mut lines = Vec::new();
-        let mut line = String::new();
-        let mut truncated = false;
-        for ch in value.chars() {
-            if ch == '\n' {
-                lines.push(std::mem::take(&mut line));
-            } else {
-                line.push(ch);
-                if f.measure_str(&line, None).0 > b.width {
-                    line.pop();
-                    lines.push(std::mem::take(&mut line));
-                    if !ch.is_whitespace() {
-                        line.push(ch);
-                    }
-                }
-            }
-            if lines.len() >= max_lines {
-                truncated = true;
-                break;
-            }
-        }
-        if !line.is_empty() && lines.len() < max_lines {
-            lines.push(line);
-        }
-        if truncated && let Some(last) = lines.last_mut() {
-            while !last.is_empty() && f.measure_str(format!("{last}…"), None).0 > b.width {
-                last.pop();
-            }
-            last.push('…');
-        }
+        let lines = presentation::lines(value, &f, b.width);
         for (i, line) in lines.iter().enumerate() {
             canvas.draw_str(
                 line,
@@ -235,22 +199,35 @@ impl SkiaRenderer {
         style: &StyleConfig,
     ) -> Result<PreparedScene> {
         style.validate()?;
+        let mut timeline = Timeline::new(animation)?;
+        let faces = faces(&style.fonts.animation_family, &style.fonts.animation_file)?;
+        let geometry = presentation::prepare(&mut timeline, animation, &faces, style);
         Ok(PreparedScene {
-            timeline: Timeline::new(animation)?,
+            timeline,
             style: style.clone(),
-            faces: faces(&style.fonts.animation_family, &style.fonts.animation_file)?,
+            faces,
+            geometry,
+            export_size: RasterSize::fit(
+                (animation.scene.width, animation.scene.height),
+                (
+                    animation.scene.width.min(1920) as f32,
+                    animation.scene.height.min(1080) as f32,
+                ),
+                1.,
+            )
+            .ok_or_else(|| AppError::validation("Rendering", "Invalid export size."))?,
         })
     }
 }
 impl PreparedScene {
+    pub fn export_size(&self) -> RasterSize {
+        self.export_size
+    }
     pub fn frame_key(&self, time: f64) -> FrameKey {
         self.timeline.frame_key(time)
     }
     pub fn frame(&self, time: f64) -> Result<Frame> {
-        self.frame_at_size(
-            time,
-            RasterSize::new(self.timeline.width, self.timeline.height)?,
-        )
+        self.frame_at_size(time, self.export_size)
     }
     pub fn frame_at_size(&self, time: f64, size: RasterSize) -> Result<Frame> {
         RasterSize::new(size.width, size.height)?;
@@ -264,6 +241,34 @@ impl PreparedScene {
         })
     }
     pub(crate) fn frame_into(&self, time: f64, size: RasterSize, rgba: &mut [u8]) -> Result<()> {
+        self.render_into(time, size, None, rgba)
+    }
+    pub fn frame_viewport(&self, time: f64, viewport: Viewport) -> Result<Frame> {
+        Viewport::new(viewport.size, viewport.x, viewport.y, viewport.scale)?;
+        let mut rgba = vec![0; viewport.size.width as usize * viewport.size.height as usize * 4];
+        self.frame_viewport_into(time, viewport, &mut rgba)?;
+        Ok(Frame {
+            width: viewport.size.width,
+            height: viewport.size.height,
+            rgba,
+        })
+    }
+    pub(crate) fn frame_viewport_into(
+        &self,
+        time: f64,
+        viewport: Viewport,
+        rgba: &mut [u8],
+    ) -> Result<()> {
+        let viewport = Viewport::new(viewport.size, viewport.x, viewport.y, viewport.scale)?;
+        self.render_into(time, viewport.size, Some(viewport), rgba)
+    }
+    fn render_into(
+        &self,
+        time: f64,
+        size: RasterSize,
+        viewport: Option<Viewport>,
+        rgba: &mut [u8],
+    ) -> Result<()> {
         let time = self.timeline.clamp_time(time)?;
         RasterSize::new(size.width, size.height)?;
         let (width, height) = (size.width, size.height);
@@ -284,19 +289,25 @@ impl PreparedScene {
             })?;
         let canvas = surface.canvas();
         canvas.clear(self.style.colors.surface.skia());
-        let scale = (width as f32 / self.timeline.width as f32)
-            .min(height as f32 / self.timeline.height as f32);
-        canvas.translate((
-            (width as f32 - self.timeline.width as f32 * scale) / 2.,
-            (height as f32 - self.timeline.height as f32 * scale) / 2.,
-        ));
-        canvas.scale((scale, scale));
-        let painter = Painter {
-            canvas,
-            style: &self.style,
-            faces: &self.faces,
-        };
-        for track in &self.timeline.objects {
+        if let Some(viewport) = viewport {
+            canvas.scale((viewport.scale, viewport.scale));
+            canvas.translate((-viewport.x, -viewport.y));
+        } else {
+            let scale = (width as f32 / self.timeline.width as f32)
+                .min(height as f32 / self.timeline.height as f32);
+            canvas.translate((
+                (width as f32 - self.timeline.width as f32 * scale) / 2.,
+                (height as f32 - self.timeline.height as f32 * scale) / 2.,
+            ));
+            canvas.scale((scale, scale));
+        }
+        for (track, geometry) in self.timeline.objects.iter().zip(&self.geometry) {
+            let painter = Painter {
+                canvas,
+                style: &self.style,
+                faces: &self.faces,
+                geometry: *geometry,
+            };
             let sample = track.sample(time);
             if sample.opacity <= 0.001 {
                 continue;
@@ -307,7 +318,6 @@ impl PreparedScene {
             } else {
                 canvas.save();
             }
-            canvas.clip_rect(rect(bounds), None, true);
             match sample.object.kind.as_str() {
                 "text" => painter.draw_text_object(&sample)?,
                 "graph" | "tree" | "linked-list" => painter.draw_graph(&sample)?,
@@ -363,16 +373,21 @@ impl Painter<'_> {
         b.width = (b.width - 36.).max(1.);
         b.height = (b.height - 24.).max(1.);
         if state {
+            let header_height =
+                presentation::label_size("STATE", self.faces, self.style, 13., true).1;
             self.text_block(
                 "STATE",
-                Box2 { height: 16., ..b },
+                Box2 {
+                    height: header_height,
+                    ..b
+                },
                 13.,
                 self.style.colors.text_secondary.skia(),
                 1.,
                 true,
             )?;
-            b.y += 24.;
-            b.height = (b.height - 24.).max(1.);
+            b.y += header_height + 12.;
+            b.height = (b.height - header_height - 12.).max(1.);
             if s.text.is_empty() && s.previous_text.is_empty() {
                 return self.text_block(
                     "No auxiliary state in this step.",
@@ -466,21 +481,22 @@ impl Painter<'_> {
         if state == "empty" && label.is_empty() {
             return Ok(());
         }
-        self.centered(label, b, (b.height * 0.55).clamp(9., 24.), true, opacity)
+        self.centered(label, b, 24., true, opacity)
     }
     fn draw_pointer(
         &self,
         name: &str,
         x: f32,
         anchor_y: f32,
-        stack: usize,
+        stack: f32,
         opacity: f32,
     ) -> Result<()> {
-        let label_y = anchor_y - 18. - stack as f32 * 16.;
+        let (width, height) = presentation::label_size(name, self.faces, self.style, 13., true);
+        let label_y = anchor_y - height - 8. - stack;
         let mut line = paint(self.style.colors.text_primary.skia(), opacity);
         line.set_stroke_width(1.5);
         self.canvas
-            .draw_line((x, label_y + 14.), (x, anchor_y), &line);
+            .draw_line((x, label_y + height), (x, anchor_y), &line);
         self.canvas
             .draw_line((x - 4., anchor_y - 4.), (x, anchor_y), &line);
         self.canvas
@@ -488,10 +504,10 @@ impl Painter<'_> {
         self.centered(
             name,
             Box2 {
-                x: x - 64.,
+                x: x - width / 2.,
                 y: label_y,
-                width: 128.,
-                height: 14.,
+                width,
+                height,
             },
             13.,
             true,
@@ -504,14 +520,15 @@ impl Painter<'_> {
         anchors: &[(f32, f32)],
         opacity: f32,
     ) -> Result<()> {
-        let mut stacks = std::collections::BTreeMap::<usize, usize>::new();
+        let mut stacks = std::collections::BTreeMap::<usize, f32>::new();
         for pointer in pointers {
             let Some((x, y)) = anchors.get(pointer.target) else {
                 continue;
             };
-            let stack = stacks.entry(pointer.target).or_insert(0);
+            let stack = stacks.entry(pointer.target).or_insert(0.);
             self.draw_pointer(&pointer.name, *x, *y, *stack, opacity)?;
-            *stack += 1;
+            *stack +=
+                presentation::label_size(&pointer.name, self.faces, self.style, 13., true).1 + 8.;
         }
         Ok(())
     }
@@ -550,13 +567,15 @@ impl Painter<'_> {
             }
         }
         if !label.is_empty() {
+            let (width, height) =
+                presentation::label_size(label, self.faces, self.style, 12., false);
             self.centered(
                 label,
                 Box2 {
-                    x: (start.0 + end.0) / 2. - 56.,
-                    y: (start.1 + end.1) / 2. - 14.,
-                    width: 112.,
-                    height: 14.,
+                    x: (start.0 + end.0) / 2. - width / 2.,
+                    y: (start.1 + end.1) / 2. - height - 4.,
+                    width,
+                    height,
                 },
                 12.,
                 false,
@@ -581,8 +600,20 @@ impl Painter<'_> {
     }
     fn draw_cells(&self, s: &ObjectSample<'_>) -> Result<()> {
         let canvas = self.canvas;
-        let to = layout::cells(s.object, s.values.len());
-        let from = layout::cells(s.object, s.previous_values.len());
+        let to = layout::natural_cells(
+            s.object,
+            s.values.len(),
+            self.geometry.cell,
+            self.geometry.pad,
+            self.geometry.gap,
+        );
+        let from = layout::natural_cells(
+            s.object,
+            s.previous_values.len(),
+            self.geometry.cell,
+            self.geometry.pad,
+            self.geometry.gap,
+        );
         let p = s.value_progress;
         // Stable slot labels stay still while value tiles move between them.
         for (i, b) in to.iter().enumerate() {
@@ -651,7 +682,13 @@ impl Painter<'_> {
         if s.values.is_empty() {
             return self.empty_marker(s.object);
         }
-        let cells = layout::grid_cells(s.object);
+        let cells = layout::natural_cells(
+            s.object,
+            s.values.len(),
+            self.geometry.cell,
+            self.geometry.pad,
+            self.geometry.gap,
+        );
         let trim = cells
             .first()
             .map(|cell| cell.width.min(cell.height) * 0.45)
@@ -703,23 +740,14 @@ impl Painter<'_> {
         if s.values.is_empty() {
             return self.empty_marker(s.object);
         }
-        let points = layout::graph_points_for(
+        let points = layout::graph_points_padded(
             s.object,
             s.values.len(),
             &s.structure.positions,
             &s.structure.edges,
+            self.geometry.pad,
         );
-        let separation = points
-            .iter()
-            .enumerate()
-            .flat_map(|(i, a)| {
-                points
-                    .iter()
-                    .skip(i + 1)
-                    .map(move |b| (a.0 - b.0).hypot(a.1 - b.1))
-            })
-            .fold(64., f32::min);
-        let radius = (separation * 0.4).clamp(6., 25.);
+        let radius = self.geometry.radius;
         let hidden: Vec<bool> = (0..s.values.len())
             .map(|i| {
                 s.structure
@@ -788,7 +816,7 @@ impl Painter<'_> {
                 .filter(|label| !label.is_empty())
                 .cloned()
                 .unwrap_or_else(|| value.to_string());
-            self.centered(&label, node, (radius * 0.8).clamp(8., 20.), true, 1.)?;
+            self.centered(&label, node, 20., true, 1.)?;
             self.centered(
                 &i.to_string(),
                 Box2 {

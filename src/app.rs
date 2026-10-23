@@ -4,7 +4,7 @@ use crate::{
     chat::{self, AnimationBundle, Attachment},
     error::{AppError, Result},
     ir::*,
-    renderer::RasterSize,
+    renderer::{RasterSize, Viewport},
     session::{SessionStore, SqliteStore},
     settings::ModelSettings,
     style::StyleConfig,
@@ -51,6 +51,7 @@ enum Event {
     Preview {
         animation: Arc<AnimationIr>,
         epoch: u64,
+        canvas: (u32, u32),
         frame: Result<preview::Pixels>,
     },
     Progress(uuid::Uuid, String),
@@ -73,6 +74,7 @@ struct State {
     preview_epoch: u64,
     style: Arc<StyleConfig>,
     preview_size: Option<RasterSize>,
+    preview_view: Option<Viewport>,
     pending_resize: Option<(RasterSize, Instant)>,
     player: Player,
     jobs: jobs::Jobs,
@@ -280,6 +282,14 @@ fn select_case(ui: &AppWindow, state: &mut State, index: usize) -> Result<()> {
     state.player = Player::default();
     state.preview_epoch = state.preview_epoch.wrapping_add(1);
     state.preview_size = None;
+    state.preview_view = None;
+    state.pending_resize = None;
+    ui.set_preview_scroll_x(0.);
+    ui.set_preview_scroll_y(0.);
+    ui.set_canvas_width(case.animation.scene.width as f32);
+    ui.set_canvas_height(case.animation.scene.height as f32);
+    ui.set_frame_pixel_width(0);
+    ui.set_frame_pixel_height(0);
     ui.set_case_index(index as i32);
     ui.set_animation_open(true);
     show_frame(ui, state)
@@ -287,15 +297,14 @@ fn select_case(ui: &AppWindow, state: &mut State, index: usize) -> Result<()> {
 fn show_frame(ui: &AppWindow, state: &mut State) -> Result<()> {
     update_preview_size(ui, state);
     if let Some(animation) = &state.animation {
-        let size = state.preview_size.unwrap_or(RasterSize::new(
-            animation.scene.width,
-            animation.scene.height,
-        )?);
+        let Some(view) = state.preview_view else {
+            return Ok(());
+        };
         state.preview.request(
             animation.clone(),
             state.player.time,
             state.preview_epoch,
-            size,
+            view,
             state.style.clone(),
         )?;
         ui.set_position((state.player.time / animation.duration) as f32);
@@ -310,23 +319,25 @@ fn update_preview_size(ui: &AppWindow, state: &mut State) {
         return;
     }
     let dpi = ui.window().scale_factor().max(0.1);
-    ui.set_preview_scale_factor(dpi);
-    let Some(animation) = &state.animation else {
+    let Some(_) = &state.animation else {
         return;
     };
-    let Some(size) = RasterSize::fit(
-        (animation.scene.width, animation.scene.height),
-        (ui.get_preview_width(), ui.get_preview_height()),
-        dpi,
+    let Some(size) = RasterSize::viewport(ui.get_preview_width(), ui.get_preview_height(), dpi)
+    else {
+        return;
+    };
+    let scale = (size.width as f32 / ui.get_preview_width())
+        .min(size.height as f32 / ui.get_preview_height());
+    let Ok(view) = Viewport::new(
+        size,
+        (-ui.get_preview_scroll_x()).max(0.),
+        (-ui.get_preview_scroll_y()).max(0.),
+        scale,
     ) else {
         return;
     };
-    if state.preview_size == Some(size) {
-        state.pending_resize = None;
-        return;
-    }
     let now = Instant::now();
-    if state.preview_size.is_some() {
+    if state.preview_size.is_some_and(|current| current != size) {
         match state.pending_resize {
             Some((pending, since)) if pending == size => {
                 if now.duration_since(since) < Duration::from_millis(120) {
@@ -341,6 +352,11 @@ fn update_preview_size(ui: &AppWindow, state: &mut State) {
     }
     state.preview_size = Some(size);
     state.pending_resize = None;
+    if state.preview_view == Some(view) {
+        return;
+    }
+    state.preview_view = Some(view);
+    ui.set_preview_scale_factor(scale);
     state.preview_epoch = state.preview_epoch.wrapping_add(1);
     state.last_frame = -1.;
 }
@@ -527,6 +543,7 @@ fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
             animation,
             epoch,
             frame,
+            canvas,
         } => {
             if s.preview_epoch == epoch
                 && s.animation
@@ -535,6 +552,8 @@ fn handle_event(ui: &AppWindow, s: &mut State, event: Event) {
             {
                 match frame {
                     Ok(pixels) => {
+                        ui.set_canvas_width(canvas.0 as f32);
+                        ui.set_canvas_height(canvas.1 as f32);
                         ui.set_frame_pixel_width(pixels.width() as i32);
                         ui.set_frame_pixel_height(pixels.height() as i32);
                         ui.set_frame(slint::Image::from_rgba8_premultiplied(pixels));
@@ -770,6 +789,7 @@ pub fn run() -> anyhow::Result<()> {
         preview_epoch: 0,
         style: Arc::new(style),
         preview_size: None,
+        preview_view: None,
         pending_resize: None,
         player: Player::default(),
         jobs: jobs::Jobs::default(),
@@ -1054,6 +1074,27 @@ mod tests {
                 });
             // Measure the animation before returning, so both page layouts are exercised.
             assert!(ui.get_preview_width() > 1. && ui.get_preview_height() > 1.);
+            ui.set_canvas_width(30_000.);
+            ui.set_canvas_height(50_000.);
+            ui.set_preview_scroll_x(-20_000.);
+            ui.set_preview_scroll_y(-40_000.);
+            assert!(ui.get_preview_width() < width && ui.get_preview_height() < height);
+            assert_eq!(ui.get_preview_scroll_x(), -20_000.);
+            assert_eq!(ui.get_preview_scroll_y(), -40_000.);
+            for label in ["← 返回对话", "播放", "导出 GIF", "保存动画"] {
+                let element = ElementHandle::find_by_accessible_label(&ui, label)
+                    .next()
+                    .unwrap();
+                let pos = element.absolute_position();
+                let size = element.size();
+                assert!(
+                    pos.x >= 0.
+                        && pos.y >= 0.
+                        && pos.x + size.width <= width + 1.
+                        && pos.y + size.height <= height + 1.,
+                    "Offscreen animation control {label}: {pos:?} {size:?}"
+                );
+            }
             i_slint_backend_testing::mock_elapsed_time(Duration::from_millis(200));
             slint::platform::update_timers_and_animations();
             ui.set_animation_open(false);
@@ -1131,6 +1172,7 @@ mod tests {
             preview_epoch: 0,
             style: Arc::default(),
             preview_size: None,
+            preview_view: None,
             pending_resize: None,
             player: Player::default(),
             jobs: jobs::Jobs::default(),

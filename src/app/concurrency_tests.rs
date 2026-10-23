@@ -16,6 +16,7 @@ fn state(db: PathBuf) -> Rc<RefCell<State>> {
         preview_epoch: 0,
         style: Arc::default(),
         preview_size: None,
+        preview_view: None,
         pending_resize: None,
         player: Player::default(),
         jobs: jobs::Jobs::default(),

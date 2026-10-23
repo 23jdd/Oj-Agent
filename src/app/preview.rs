@@ -3,7 +3,7 @@ use crate::{
     animation::timeline::FrameKey,
     error::{AppError, Result},
     ir::AnimationIr,
-    renderer::{PreparedScene, RasterSize, SkiaRenderer},
+    renderer::{PreparedScene, RasterSize, SkiaRenderer, Viewport},
     style::StyleConfig,
 };
 use slint::{Rgba8Pixel, SharedPixelBuffer};
@@ -13,11 +13,34 @@ use std::{
 };
 
 pub type Pixels = SharedPixelBuffer<Rgba8Pixel>;
+#[derive(Clone, Copy, PartialEq)]
+pub enum PreviewView {
+    Fit(RasterSize),
+    Camera(Viewport),
+}
+impl From<RasterSize> for PreviewView {
+    fn from(size: RasterSize) -> Self {
+        Self::Fit(size)
+    }
+}
+impl From<Viewport> for PreviewView {
+    fn from(view: Viewport) -> Self {
+        Self::Camera(view)
+    }
+}
+impl PreviewView {
+    fn size(self) -> RasterSize {
+        match self {
+            Self::Fit(size) => size,
+            Self::Camera(view) => view.size,
+        }
+    }
+}
 struct Request {
     animation: Arc<AnimationIr>,
     time: f64,
     epoch: u64,
-    size: RasterSize,
+    view: PreviewView,
     style: Arc<StyleConfig>,
 }
 #[derive(Default)]
@@ -38,7 +61,7 @@ impl PreviewWorker {
             let mut prepared: Option<PreparedScene> = None;
             let mut cache = VecDeque::<(FrameKey, Pixels)>::new();
             let mut last_sent = None;
-            let mut raster_size = None;
+            let mut camera = None;
             let mut current_style: Option<Arc<StyleConfig>> = None;
             loop {
                 let request = {
@@ -56,6 +79,10 @@ impl PreviewWorker {
                     }
                     guard.request.take().expect("render request is ready")
                 };
+                let mut canvas = (
+                    request.animation.scene.width,
+                    request.animation.scene.height,
+                );
                 let result = (|| {
                     if !current
                         .as_ref()
@@ -72,10 +99,11 @@ impl PreviewWorker {
                         last_sent = None;
                     }
                     let scene = prepared.as_ref().expect("render scene prepared");
-                    if raster_size != Some(request.size) {
+                    canvas = (scene.timeline.width, scene.timeline.height);
+                    if camera != Some(request.view) {
                         cache.clear();
                         last_sent = None;
-                        raster_size = Some(request.size);
+                        camera = Some(request.view);
                     }
                     let time = scene.timeline.clamp_time(request.time)?;
                     let key = scene.frame_key(time);
@@ -88,7 +116,8 @@ impl PreviewWorker {
                         cache.push_back(hit);
                         pixels
                     } else {
-                        let (width, height) = (request.size.width, request.size.height);
+                        let size = request.view.size();
+                        let (width, height) = (size.width, size.height);
                         let frame_bytes = width as usize * height as usize * 4;
                         let limit = (32 * 1024 * 1024 / frame_bytes).clamp(1, 16);
                         let mut pixels = if cache.len() >= limit {
@@ -99,7 +128,14 @@ impl PreviewWorker {
                         } else {
                             Pixels::new(width, height)
                         };
-                        scene.frame_into(time, request.size, pixels.make_mut_bytes())?;
+                        match request.view {
+                            PreviewView::Fit(size) => {
+                                scene.frame_into(time, size, pixels.make_mut_bytes())?
+                            }
+                            PreviewView::Camera(view) => {
+                                scene.frame_viewport_into(time, view, pixels.make_mut_bytes())?
+                            }
+                        }
                         cache.push_back((key, pixels.clone()));
                         pixels
                     };
@@ -115,6 +151,7 @@ impl PreviewWorker {
                     .send(Event::Preview {
                         animation: request.animation,
                         epoch: request.epoch,
+                        canvas,
                         frame,
                     })
                     .is_err()
@@ -130,10 +167,15 @@ impl PreviewWorker {
         animation: Arc<AnimationIr>,
         time: f64,
         epoch: u64,
-        size: RasterSize,
+        view: impl Into<PreviewView>,
         style: Arc<StyleConfig>,
     ) -> Result<()> {
+        let view = view.into();
+        let size = view.size();
         RasterSize::new(size.width, size.height)?;
+        if let PreviewView::Camera(view) = view {
+            Viewport::new(view.size, view.x, view.y, view.scale)?;
+        }
         let (pending, wake) = &*self.0;
         let mut state = pending.lock().map_err(|_| {
             AppError::new(
@@ -147,7 +189,7 @@ impl PreviewWorker {
             animation,
             time,
             epoch,
-            size,
+            view,
             style,
         });
         wake.notify_one();
@@ -244,5 +286,46 @@ mod tests {
                 .unwrap()
                 .rgba
         );
+    }
+    #[test]
+    fn scrolling_a_paused_scene_invalidates_pixels_and_returning_restores_them() {
+        let animation = fixture();
+        let (tx, rx) = mpsc::channel();
+        let worker = PreviewWorker::new(tx);
+        let style = Arc::new(StyleConfig::default());
+        let size = RasterSize::new(400, 300).unwrap();
+        let mut frames = Vec::new();
+        for (epoch, x, y) in [(1, 0., 0.), (2, 200., 400.), (3, 0., 0.)] {
+            let view = Viewport::new(size, x, y, 1.).unwrap();
+            worker
+                .request(animation.clone(), 0.4, epoch, view, style.clone())
+                .unwrap();
+            match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
+                Event::Preview {
+                    epoch: received,
+                    canvas,
+                    frame: Ok(pixels),
+                    ..
+                } => {
+                    assert_eq!(received, epoch);
+                    assert!(
+                        canvas.0 >= animation.scene.width && canvas.1 >= animation.scene.height
+                    );
+                    assert_eq!(
+                        pixels.as_bytes(),
+                        SkiaRenderer
+                            .prepare(&animation)
+                            .unwrap()
+                            .frame_viewport(0.4, view)
+                            .unwrap()
+                            .rgba
+                    );
+                    frames.push(pixels);
+                }
+                _ => panic!("missing camera frame"),
+            }
+        }
+        assert_ne!(frames[0].as_bytes(), frames[1].as_bytes());
+        assert_eq!(frames[0].as_bytes(), frames[2].as_bytes());
     }
 }
