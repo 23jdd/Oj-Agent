@@ -37,6 +37,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 [build-dependencies]
 slint-build = "=1.18.1"
+winresource = "0.1"
 
 [dev-dependencies]
 i-slint-backend-testing = "=1.18.1"

@@ -23,6 +23,11 @@ cargo run --locked
 
 For a release build, run `cargo build --release --locked` and launch the executable in `target/release/`.
 
+Install or update with `cargo install --path . --locked --force`. On Windows, point
+your shortcut directly to `%USERPROFILE%\.cargo\bin\oj-agent.exe` (or your custom
+Cargo install directory). Opening it without arguments starts the GUI without a
+console window. See [Windows launch and CLI usage](docs/USAGE.md#windows-install-and-shortcuts).
+
 ## Features
 
 - Persistent conversations with Markdown, selectable code blocks, tables and attachment snapshots.

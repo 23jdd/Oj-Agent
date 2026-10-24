@@ -23,6 +23,10 @@ cargo run --locked
 
 发布构建使用 `cargo build --release --locked`，完成后运行 `target/release/` 中的可执行文件。
 
+安装或更新使用 `cargo install --path . --locked --force`。Windows 快捷方式直接指向
+`%USERPROFILE%\.cargo\bin\oj-agent.exe`（或自定义 Cargo 安装目录）；无参数启动时只显示
+应用窗口，不打开控制台。详见 [Windows 安装与快捷方式](docs/USAGE.md#windows-install-and-shortcuts)。
+
 ## 主要功能
 
 - 持久化对话，支持 Markdown、可选择的代码块、表格和附件快照。

@@ -16,6 +16,38 @@ clearing them does not save or discard the edited values.
 
 Generation and verification run off the UI thread. A dedicated Skia worker paints preview frames directly into shared pixels. The image uses the viewport's physical resolution and redraws after 120 ms of stable resizing, including while paused. Playback, steps, seeking, speed and case selection share the prepared timeline with export. See [renderer](RENDERER.md).
 
+## Windows install and shortcuts
+
+From the project directory, install or replace the executable:
+
+```sh
+cargo install --path . --locked --force
+```
+
+Close the installed app before updating it. Point a Windows shortcut directly to
+`%USERPROFILE%\.cargo\bin\oj-agent.exe`, with no arguments. If you set `CARGO_HOME`
+or an install root, use that directory's `bin/oj-agent.exe` instead. The executable
+uses the Windows GUI subsystem in both debug and release builds, so ordinary
+shortcut launches do not open a terminal. Startup failures show an error dialog.
+Existing shortcuts targeting the installed executable continue to work after updating.
+
+The Windows executable embeds the same OJ icon as the application window; no
+separate icon file is required after installation. If an existing shortcut keeps
+the generic icon after updating, open its **Properties → Change Icon**, select the
+installed `oj-agent.exe`, and choose the OJ icon, or recreate that shortcut.
+
+Windows 下更新前先关闭已安装的应用，再执行上述命令。快捷方式直接指向安装后的
+`oj-agent.exe`，不要通过 `cmd.exe`、PowerShell 或批处理文件启动；无参数启动只显示
+应用窗口。若仍弹出终端，请检查快捷方式是否指向旧版本或终端包装脚本。
+
+EXE 已内嵌 OJ 图标，无需另外复制图片。如果旧快捷方式仍显示默认图标，在
+**属性 → 更改图标** 中选择更新后的 `oj-agent.exe`，或重新创建快捷方式。
+
+CLI arguments attach to an existing parent console and preserve redirected output;
+they never allocate a new terminal. When scripting, wait for the GUI-subsystem
+process to finish: use `oj-agent.exe --help | Out-Host` in PowerShell, or
+`start /wait "" oj-agent.exe --help` in Command Prompt.
+
 ## CLI
 
 ```sh
